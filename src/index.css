@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 250 250 248;
+    --foreground: 28 25 23;
+  }
+
+  body {
+    background-color: #FAFAF8;
+    color: #1C1917;
+    font-family: 'Plus Jakarta Sans', Inter, sans-serif;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom Minimalist Luxury Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #FAFAF8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D6D3D1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B48C36;
+}
+
+/* Smooth page transitions */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Print Rules for High-End GST Tax Invoices */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  
+  header, aside, nav, button, .no-print, .portal-switcher {
+    display: none !important;
+  }
+}
