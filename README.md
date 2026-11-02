@@ -1,8 +1,8 @@
 # AURA-PMS — Multi-Tenant Luxury Hospitality SaaS & Direct Booking Engine
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-aura--resorts.surge.sh-d4af37?style=for-the-badge&logo=google-chrome&logoColor=white)](https://aura-resorts.surge.sh)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-2ea44f?style=for-the-badge&logo=github&logoColor=white)](https://shashikant-panchal.github.io/AURA-PMS/)
 
-> **Live Production URL:** **[https://aura-resorts.surge.sh](https://aura-resorts.surge.sh)**
+> **Permanent 24/7 Production URL:** **[https://shashikant-panchal.github.io/AURA-PMS/](https://shashikant-panchal.github.io/AURA-PMS/)**
 > 
 > **Pristine Luxury Aesthetic | 3 Role-Protected Routed Portals | Dynamic Multi-Tenant White-Labeling | Indian GST Engine | Real OTA Brand Integrations**
 
