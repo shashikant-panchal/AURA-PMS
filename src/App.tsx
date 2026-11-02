@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GuestPortal } from './pages/GuestPortal';
 import { AdminPortal } from './pages/AdminPortal';
 import { SuperAdminPortal } from './pages/SuperAdminPortal';
@@ -9,7 +9,7 @@ import { Notifications } from './components/layout/Notifications';
 
 export const App: React.FC = () => {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <div className="min-h-screen bg-[#FAFAF8] text-[#1C1917] flex flex-col font-sans">
         {/* Route Engine with RBAC Role Protection */}
         <Routes>
@@ -47,7 +47,7 @@ export const App: React.FC = () => {
         {/* Global Notifications */}
         <Notifications />
       </div>
-    </BrowserRouter>
+    </HashRouter>
   );
 };
 
