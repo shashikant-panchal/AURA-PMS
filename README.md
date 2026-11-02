@@ -1,5 +1,9 @@
 # AURA-PMS — Multi-Tenant Luxury Hospitality SaaS & Direct Booking Engine
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-aura--resorts.surge.sh-d4af37?style=for-the-badge&logo=google-chrome&logoColor=white)](https://aura-resorts.surge.sh)
+
+> **Live Production URL:** **[https://aura-resorts.surge.sh](https://aura-resorts.surge.sh)**
+> 
 > **Pristine Luxury Aesthetic | 3 Role-Protected Routed Portals | Dynamic Multi-Tenant White-Labeling | Indian GST Engine | Real OTA Brand Integrations**
 
 A commercial-grade, multi-tenant Property Management System (PMS), Channel Manager Gateway, and Luxury Direct Guest Booking Engine built with React 18, TypeScript, Tailwind CSS, Lucide Icons, and Zustand with local storage persistence.
@@ -93,3 +97,4 @@ npm run preview
 
 ## 📄 License
 MIT License. Created for high-end luxury hospitality SaaS.
+
