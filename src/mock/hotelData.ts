@@ -1,4 +1,16 @@
-import { HotelTenant, RoomCategory, Room, Reservation, ChannelConnection, PromoCode, SyncLog, AuthUser } from '../types/hotel';
+import {
+  HotelTenant,
+  RoomCategory,
+  Room,
+  Reservation,
+  ChannelConnection,
+  PromoCode,
+  SyncLog,
+  AuthUser,
+  PosService,
+  PosOrder,
+  NightAuditReport
+} from '../types/hotel';
 import { format, addDays, subDays } from 'date-fns';
 
 export interface MockAccount extends AuthUser {
@@ -7,19 +19,27 @@ export interface MockAccount extends AuthUser {
 
 export const MOCK_ACCOUNTS: MockAccount[] = [
   {
-    id: 'user-super',
-    name: 'Alexander Sterling (SaaS Owner)',
-    email: 'superadmin@aurasaas.io',
-    password: 'super123',
-    role: 'SUPER_ADMIN',
-  },
-  {
     id: 'user-hotel-admin',
     name: 'Vikramaditya Singh (General Manager)',
     email: 'admin@udaivilas.com',
     password: 'admin123',
     role: 'HOTEL_ADMIN',
     hotelId: 'prop-udaipur',
+  },
+  {
+    id: 'user-bookone-admin',
+    name: 'Twinkle Bagh (General Manager)',
+    email: 'bookonedemo123@gmail.com',
+    password: 'Pass@1234',
+    role: 'HOTEL_ADMIN',
+    hotelId: 'prop-bookone',
+  },
+  {
+    id: 'user-super',
+    name: 'Alexander Sterling (SaaS Owner)',
+    email: 'superadmin@aurasaas.io',
+    password: 'super123',
+    role: 'SUPER_ADMIN',
   },
   {
     id: 'user-guest',
@@ -64,6 +84,28 @@ export const INITIAL_PROPERTIES: HotelTenant[] = [
     monthlyBillingAmount: 45000,
     rating: 5.0,
     roomsCount: 17,
+  },
+  {
+    id: 'prop-bookone',
+    name: 'BookOne Suite & Towers',
+    code: 'BSE-PATIA',
+    tagline: 'Commercial Grade Smart Hospitality & Channel Management Suites',
+    logoUrl: 'https://bookonelocal.in/cdn/2026-04-07-121907443-logo2.jpg',
+    city: 'Bhubaneswar',
+    state: 'Odisha',
+    currency: 'INR',
+    currencySymbol: '₹',
+    gstin: '21AAACB1234D1Z5',
+    checkInTime: '14:00',
+    checkOutTime: '11:00',
+    contactEmail: 'bookonedemo123@gmail.com',
+    contactPhone: '+91 79785 78046',
+    address: 'DLF Cyber City, Patia, Bhubaneswar, Odisha 751024, India',
+    subscriptionPlan: 'ENTERPRISE',
+    status: 'ACTIVE',
+    monthlyBillingAmount: 25000,
+    rating: 4.9,
+    roomsCount: 20,
   },
   {
     id: 'prop-ranthambore',
@@ -134,8 +176,10 @@ export const INITIAL_PROPERTIES: HotelTenant[] = [
 ];
 
 export const INITIAL_CATEGORIES: RoomCategory[] = [
+  // Udaipur Palace Categories (Original)
   {
     id: 'cat-garden',
+    hotelId: 'prop-udaipur',
     name: 'Standard Garden Villa',
     code: 'SGV',
     tier: 'Garden Sanctuary',
@@ -158,6 +202,7 @@ export const INITIAL_CATEGORIES: RoomCategory[] = [
   },
   {
     id: 'cat-heritage',
+    hotelId: 'prop-udaipur',
     name: 'Royal Heritage Suite',
     code: 'RHS',
     tier: 'Palace Heritage',
@@ -179,6 +224,7 @@ export const INITIAL_CATEGORIES: RoomCategory[] = [
   },
   {
     id: 'cat-lake',
+    hotelId: 'prop-udaipur',
     name: 'Lakeview Pavilion',
     code: 'LVP',
     tier: 'Waterfront Serenity',
@@ -200,6 +246,7 @@ export const INITIAL_CATEGORIES: RoomCategory[] = [
   },
   {
     id: 'cat-pool-villa',
+    hotelId: 'prop-udaipur',
     name: 'Kohinoor Private Pool Villa',
     code: 'KPV',
     tier: 'Private Sanctuary',
@@ -221,6 +268,7 @@ export const INITIAL_CATEGORIES: RoomCategory[] = [
   },
   {
     id: 'cat-maharaja',
+    hotelId: 'prop-udaipur',
     name: 'Maharaja Presidential Sovereign Villa',
     code: 'MSV',
     tier: 'Imperial Sovereign',
@@ -241,38 +289,189 @@ export const INITIAL_CATEGORIES: RoomCategory[] = [
     amenities: ['Rolls-Royce Ghost Chauffeur Included', 'Private Executive Chef', 'Security Detail Escort', 'Private Cigar Lounge & Cellar', 'Bullet-Proof Glass Veranda'],
     totalRooms: 2,
   },
+
+  // BookOne Suite Categories
+  {
+    id: 'cat-bse-std',
+    hotelId: 'prop-bookone',
+    name: 'Standard Room',
+    code: 'STD',
+    tier: 'Standard',
+    description: 'Well-appointed comfortable business rooms with high-speed Wi-Fi, ergonomic work desk and city view.',
+    basePrice: 2000,
+    rackRate: 2500,
+    minRate: 1500,
+    maxRate: 4000,
+    extraBedCharge: 500,
+    maxAdults: 2,
+    maxChildren: 1,
+    sqFt: 280,
+    bedType: 'Queen Comfort Bed',
+    heroImage: 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=800&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1611892440504-42a792e24d32?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80'
+    ],
+    amenities: ['High Speed Wi-Fi', 'Work Desk', 'Smart TV', 'Tea/Coffee Maker', 'Air Conditioning'],
+    totalRooms: 5,
+  },
+  {
+    id: 'cat-bse-dlx',
+    hotelId: 'prop-bookone',
+    name: 'Deluxe Room',
+    code: 'DLX',
+    tier: 'Deluxe',
+    description: 'Spacious modern deluxe rooms featuring plush king bedding, panoramic glass windows, and luxury rain shower.',
+    basePrice: 2500,
+    rackRate: 3200,
+    minRate: 1800,
+    maxRate: 4500,
+    extraBedCharge: 600,
+    maxAdults: 2,
+    maxChildren: 1,
+    sqFt: 350,
+    bedType: 'King Bed',
+    heroImage: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80'
+    ],
+    amenities: ['King Bed', 'City Skyline View', 'Rain Shower', 'Espresso Machine', 'Mini Bar', '24/7 Room Service'],
+    totalRooms: 5,
+  },
+  {
+    id: 'cat-bse-super',
+    hotelId: 'prop-bookone',
+    name: 'Super Deluxe Room',
+    code: 'SDLX',
+    tier: 'Premium',
+    description: 'Executive super deluxe room with generous seating lounge, deep soaking tub, and luxury bath amenities.',
+    basePrice: 3000,
+    rackRate: 3800,
+    minRate: 2200,
+    maxRate: 5500,
+    extraBedCharge: 700,
+    maxAdults: 3,
+    maxChildren: 1,
+    sqFt: 420,
+    bedType: 'Emperor Bed',
+    heroImage: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80'
+    ],
+    amenities: ['Lounge Area', 'Soaking Tub', 'Complimentary Breakfast', 'Butler Service', 'High Speed Fibre'],
+    totalRooms: 5,
+  },
+  {
+    id: 'cat-bse-suite',
+    hotelId: 'prop-bookone',
+    name: 'Executive Suite Room',
+    code: 'STE',
+    tier: 'Suite',
+    description: 'Grand master suite with private meeting salon, kitchenette, walk-in dressing wardrobe, and VIP concierge privileges.',
+    basePrice: 3500,
+    rackRate: 5000,
+    minRate: 2800,
+    maxRate: 7500,
+    extraBedCharge: 1000,
+    maxAdults: 3,
+    maxChildren: 2,
+    sqFt: 580,
+    bedType: 'Royal Master Bed',
+    heroImage: 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80',
+    gallery: [
+      'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?auto=format&fit=crop&w=800&q=80'
+    ],
+    amenities: ['Separate Living Room', 'Executive Lounge Access', 'Airport Chauffeur', 'Complimentary Minibar', 'Jacuzzi'],
+    totalRooms: 5,
+  },
 ];
 
 export const INITIAL_ROOMS: Room[] = [
-  // Garden Villas (Floor 1)
-  { id: 'room-101', roomNumber: '101', categoryId: 'cat-garden', floor: 1, status: 'Occupied', cleanliness: 'Clean' },
-  { id: 'room-102', roomNumber: '102', categoryId: 'cat-garden', floor: 1, status: 'Reserved', cleanliness: 'Clean' },
-  { id: 'room-103', roomNumber: '103', categoryId: 'cat-garden', floor: 1, status: 'Available', cleanliness: 'Inspected' },
-  { id: 'room-104', roomNumber: '104', categoryId: 'cat-garden', floor: 1, status: 'Cleaning', cleanliness: 'Dirty' },
+  // Udaipur Rooms (Floor 1: Garden Villas)
+  { id: 'room-101', hotelId: 'prop-udaipur', roomNumber: '101', categoryId: 'cat-garden', floor: 1, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'room-102', hotelId: 'prop-udaipur', roomNumber: '102', categoryId: 'cat-garden', floor: 1, status: 'Reserved', cleanliness: 'Clean' },
+  { id: 'room-103', hotelId: 'prop-udaipur', roomNumber: '103', categoryId: 'cat-garden', floor: 1, status: 'Available', cleanliness: 'Inspected' },
+  { id: 'room-104', hotelId: 'prop-udaipur', roomNumber: '104', categoryId: 'cat-garden', floor: 1, status: 'Cleaning', cleanliness: 'Dirty' },
 
-  // Royal Heritage Suites (Floor 2)
-  { id: 'room-201', roomNumber: '201', categoryId: 'cat-heritage', floor: 2, status: 'Occupied', cleanliness: 'Clean' },
-  { id: 'room-202', roomNumber: '202', categoryId: 'cat-heritage', floor: 2, status: 'Available', cleanliness: 'Clean' },
-  { id: 'room-203', roomNumber: '203', categoryId: 'cat-heritage', floor: 2, status: 'Reserved', cleanliness: 'Inspected' },
-  { id: 'room-204', roomNumber: '204', categoryId: 'cat-heritage', floor: 2, status: 'Maintenance', cleanliness: 'Dirty', maintenanceNote: 'Antique brass chandelier restoration' },
+  // Udaipur Rooms (Floor 2: Royal Heritage Suites)
+  { id: 'room-201', hotelId: 'prop-udaipur', roomNumber: '201', categoryId: 'cat-heritage', floor: 2, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'room-202', hotelId: 'prop-udaipur', roomNumber: '202', categoryId: 'cat-heritage', floor: 2, status: 'Available', cleanliness: 'Clean' },
+  { id: 'room-203', hotelId: 'prop-udaipur', roomNumber: '203', categoryId: 'cat-heritage', floor: 2, status: 'Reserved', cleanliness: 'Inspected' },
+  { id: 'room-204', hotelId: 'prop-udaipur', roomNumber: '204', categoryId: 'cat-heritage', floor: 2, status: 'Maintenance', cleanliness: 'Dirty', maintenanceNote: 'Antique brass chandelier restoration' },
 
-  // Lakeview Pavilions (Floor 3)
-  { id: 'room-301', roomNumber: '301', categoryId: 'cat-lake', floor: 3, status: 'Occupied', cleanliness: 'Clean' },
-  { id: 'room-302', roomNumber: '302', categoryId: 'cat-lake', floor: 3, status: 'Occupied', cleanliness: 'Clean' },
-  { id: 'room-303', roomNumber: '303', categoryId: 'cat-lake', floor: 3, status: 'Available', cleanliness: 'Inspected' },
-  { id: 'room-304', roomNumber: '304', categoryId: 'cat-lake', floor: 3, status: 'Reserved', cleanliness: 'Clean' },
+  // Udaipur Rooms (Floor 3: Lakeview Pavilions)
+  { id: 'room-301', hotelId: 'prop-udaipur', roomNumber: '301', categoryId: 'cat-lake', floor: 3, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'room-302', hotelId: 'prop-udaipur', roomNumber: '302', categoryId: 'cat-lake', floor: 3, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'room-303', hotelId: 'prop-udaipur', roomNumber: '303', categoryId: 'cat-lake', floor: 3, status: 'Available', cleanliness: 'Inspected' },
+  { id: 'room-304', hotelId: 'prop-udaipur', roomNumber: '304', categoryId: 'cat-lake', floor: 3, status: 'Reserved', cleanliness: 'Clean' },
 
-  // Kohinoor Pool Villas (Private Estate Wing)
-  { id: 'room-villa-1', roomNumber: 'Villa 1', categoryId: 'cat-pool-villa', floor: 1, status: 'Occupied', cleanliness: 'Clean' },
-  { id: 'room-villa-2', roomNumber: 'Villa 2', categoryId: 'cat-pool-villa', floor: 1, status: 'Available', cleanliness: 'Inspected' },
-  { id: 'room-villa-3', roomNumber: 'Villa 3', categoryId: 'cat-pool-villa', floor: 1, status: 'Reserved', cleanliness: 'Clean' },
+  // Udaipur Rooms (Private Estate Wing: Kohinoor Pool Villas)
+  { id: 'room-villa-1', hotelId: 'prop-udaipur', roomNumber: 'Villa 1', categoryId: 'cat-pool-villa', floor: 1, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'room-villa-2', hotelId: 'prop-udaipur', roomNumber: 'Villa 2', categoryId: 'cat-pool-villa', floor: 1, status: 'Available', cleanliness: 'Inspected' },
+  { id: 'room-villa-3', hotelId: 'prop-udaipur', roomNumber: 'Villa 3', categoryId: 'cat-pool-villa', floor: 1, status: 'Reserved', cleanliness: 'Clean' },
 
-  // Maharaja Presidential Sovereign Estate
-  { id: 'room-sovereign-1', roomNumber: 'Sovereign I', categoryId: 'cat-maharaja', floor: 4, status: 'Occupied', cleanliness: 'Clean' },
-  { id: 'room-sovereign-2', roomNumber: 'Sovereign II', categoryId: 'cat-maharaja', floor: 4, status: 'Available', cleanliness: 'Inspected' },
+  // Udaipur Rooms (Floor 4: Maharaja Presidential Sovereign Estate)
+  { id: 'room-sovereign-1', hotelId: 'prop-udaipur', roomNumber: 'Sovereign I', categoryId: 'cat-maharaja', floor: 4, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'room-sovereign-2', hotelId: 'prop-udaipur', roomNumber: 'Sovereign II', categoryId: 'cat-maharaja', floor: 4, status: 'Available', cleanliness: 'Inspected' },
+
+  // BookOne Rooms (Floor 1: Standard Rooms 101 - 105)
+  { id: 'bse-101', hotelId: 'prop-bookone', roomNumber: 'B-101', categoryId: 'cat-bse-std', floor: 1, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'bse-102', hotelId: 'prop-bookone', roomNumber: 'B-102', categoryId: 'cat-bse-std', floor: 1, status: 'Available', cleanliness: 'Clean' },
+  { id: 'bse-103', hotelId: 'prop-bookone', roomNumber: 'B-103', categoryId: 'cat-bse-std', floor: 1, status: 'Reserved', cleanliness: 'Clean' },
+  { id: 'bse-104', hotelId: 'prop-bookone', roomNumber: 'B-104', categoryId: 'cat-bse-std', floor: 1, status: 'Cleaning', cleanliness: 'Dirty' },
+  { id: 'bse-105', hotelId: 'prop-bookone', roomNumber: 'B-105', categoryId: 'cat-bse-std', floor: 1, status: 'Available', cleanliness: 'Clean' },
+
+  // BookOne Rooms (Floor 2: Deluxe Rooms 201 - 205)
+  { id: 'bse-201', hotelId: 'prop-bookone', roomNumber: 'B-201', categoryId: 'cat-bse-dlx', floor: 2, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'bse-202', hotelId: 'prop-bookone', roomNumber: 'B-202', categoryId: 'cat-bse-dlx', floor: 2, status: 'Available', cleanliness: 'Clean' },
+  { id: 'bse-203', hotelId: 'prop-bookone', roomNumber: 'B-203', categoryId: 'cat-bse-dlx', floor: 2, status: 'Available', cleanliness: 'Clean' },
+  { id: 'bse-204', hotelId: 'prop-bookone', roomNumber: 'B-204', categoryId: 'cat-bse-dlx', floor: 2, status: 'Reserved', cleanliness: 'Clean' },
+  { id: 'bse-205', hotelId: 'prop-bookone', roomNumber: 'B-205', categoryId: 'cat-bse-dlx', floor: 2, status: 'Maintenance', cleanliness: 'Dirty', maintenanceNote: 'AC filter overhaul' },
+
+  // BookOne Rooms (Floor 3: Super Deluxe Rooms 301 - 305)
+  { id: 'bse-301', hotelId: 'prop-bookone', roomNumber: 'B-301', categoryId: 'cat-bse-super', floor: 3, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'bse-302', hotelId: 'prop-bookone', roomNumber: 'B-302', categoryId: 'cat-bse-super', floor: 3, status: 'Available', cleanliness: 'Clean' },
+  { id: 'bse-303', hotelId: 'prop-bookone', roomNumber: 'B-303', categoryId: 'cat-bse-super', floor: 3, status: 'Cleaning', cleanliness: 'In Progress' },
+  { id: 'bse-304', hotelId: 'prop-bookone', roomNumber: 'B-304', categoryId: 'cat-bse-super', floor: 3, status: 'Available', cleanliness: 'Clean' },
+  { id: 'bse-305', hotelId: 'prop-bookone', roomNumber: 'B-305', categoryId: 'cat-bse-super', floor: 3, status: 'Available', cleanliness: 'Clean' },
+
+  // BookOne Rooms (Floor 4: Executive Suites 401 - 405)
+  { id: 'bse-401', hotelId: 'prop-bookone', roomNumber: 'B-401', categoryId: 'cat-bse-suite', floor: 4, status: 'Occupied', cleanliness: 'Clean' },
+  { id: 'bse-402', hotelId: 'prop-bookone', roomNumber: 'B-402', categoryId: 'cat-bse-suite', floor: 4, status: 'Available', cleanliness: 'Clean' },
+  { id: 'bse-403', hotelId: 'prop-bookone', roomNumber: 'B-403', categoryId: 'cat-bse-suite', floor: 4, status: 'Reserved', cleanliness: 'Clean' },
+  { id: 'bse-404', hotelId: 'prop-bookone', roomNumber: 'B-404', categoryId: 'cat-bse-suite', floor: 4, status: 'Available', cleanliness: 'Clean' },
+  { id: 'bse-405', hotelId: 'prop-bookone', roomNumber: 'B-405', categoryId: 'cat-bse-suite', floor: 4, status: 'Available', cleanliness: 'Clean' },
+];
+
+export const INITIAL_SERVICES: PosService[] = [
+  // Luxury Dining & Experiences (Udaipur & Common)
+  { id: 'srv-1', hotelId: 'prop-udaipur', name: 'Royal Mewar Thali Dinner', category: 'Food', description: 'Authentic 14-dish sovereign Rajasthani royal culinary experience', price: 1800, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=200', active: true },
+  { id: 'srv-2', hotelId: 'prop-udaipur', name: 'Abhyanga Herbal Ayurvedic Ritual (90m)', category: 'Activity', description: 'Rejuvenating full-body warm herbal oil treatment by master therapists', price: 4500, taxRate: 0.18, imageUrl: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=200', active: true },
+  { id: 'srv-3', hotelId: 'prop-udaipur', name: 'Private Sunset Solar Lake Cruise', category: 'Activity', description: 'Private solar-powered boat cruise on Lake Pichola with champagne service', price: 12000, taxRate: 0.18, imageUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200', active: true },
+  { id: 'srv-4', hotelId: 'prop-udaipur', name: 'BMW 7 Series Chauffeur Airport Transfer', category: 'Transport', description: 'Luxury chauffeured transfer to/from Maharana Pratap Airport (UDR)', price: 3500, taxRate: 0.18, imageUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=200', active: true },
+  { id: 'srv-5', hotelId: 'prop-udaipur', name: 'Express Silk & Cashmere Dry Cleaning', category: 'Activity', description: 'Gentle organic solvent wash and steam press for formal garments', price: 850, taxRate: 0.18, imageUrl: 'https://images.unsplash.com/photo-1545173168-9f1907e80789?w=200', active: true },
+  { id: 'srv-6', hotelId: 'prop-udaipur', name: 'Gourmet Buffet Breakfast Spread', category: 'Food', description: 'Continental, American and regional Indian breakfast with fresh juices', price: 450, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=200', active: true },
+  { id: 'srv-7', hotelId: 'prop-udaipur', name: 'Executive 4-Course Lunch', category: 'Food', description: 'Chef-curated corporate lunch with soup, salad, main and dessert', price: 950, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200', active: true },
+  { id: 'srv-8', hotelId: 'prop-udaipur', name: 'Afternoon High Tea & Patisserie', category: 'Beverages', description: 'Artisanal scones, finger sandwiches, macarons and Darjeeling tea', price: 650, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=200', active: true },
+  { id: 'srv-9', hotelId: 'prop-udaipur', name: 'French Press Coffee & Organic Teas', category: 'Beverages', description: 'Single-origin Coorg roast and loose leaf organic herbal infusions', price: 220, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=200', active: true },
+  { id: 'srv-10', hotelId: 'prop-udaipur', name: 'Extra Rollaway Orthopaedic Bed', category: 'Extra Bed', description: 'Full-size orthopaedic rollaway bed with 400TC Egyptian cotton linen', price: 1500, taxRate: 0.12, imageUrl: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=200', active: true },
+  { id: 'srv-11', hotelId: 'prop-udaipur', name: 'Late Check-Out until 4 PM', category: 'Express Checkout', description: 'Extended room availability subject to property occupancy', price: 2000, taxRate: 0.18, imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=200', active: true },
+  { id: 'srv-12', hotelId: 'prop-udaipur', name: 'Himalayan Spring Water (Pack of 4)', category: 'Beverages', description: 'Natural mineral bottled artesian spring water', price: 150, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=200', active: true },
+  { id: 'srv-13', hotelId: 'prop-udaipur', name: 'Dom Pérignon Vintage Champagne', category: 'Beverages', description: 'Chilled bottle of 2013 Dom Pérignon with crystal flutes and strawberries', price: 22000, taxRate: 0.18, imageUrl: 'https://images.unsplash.com/photo-1569919659476-f0852f6834b7?w=200', active: true },
+
+  // BookOne Suite Catalog
+  { id: 'srv-bse-1', hotelId: 'prop-bookone', name: 'Buffet Breakfast', category: 'Food', description: 'Morning spread with South & North Indian continental delights', price: 200, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1533089860892-a7c6f0a88666?w=200', active: true },
+  { id: 'srv-bse-2', hotelId: 'prop-bookone', name: 'Executive Lunch', category: 'Food', description: 'Curated 4-course gourmet business lunch', price: 450, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200', active: true },
+  { id: 'srv-bse-3', hotelId: 'prop-bookone', name: 'Fine Dining Dinner', category: 'Food', description: 'Chef specialty tandoori and regional specialties', price: 650, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=200', active: true },
+  { id: 'srv-bse-4', hotelId: 'prop-bookone', name: 'Tea & Artisan Coffee', category: 'Beverages', description: 'Fresh roasted coffee and organic Darjeeling/Assam teas', price: 120, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=200', active: true },
+  { id: 'srv-bse-5', hotelId: 'prop-bookone', name: 'Premium Laundry Service', category: 'Activity', description: 'Same-day steam press, wash and gentle fold', price: 500, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1545173168-9f1907e80789?w=200', active: true },
+  { id: 'srv-bse-6', hotelId: 'prop-bookone', name: 'Airport Pickup / Drop', category: 'Transport', description: 'Bhubaneswar BBI Airport dedicated chauffeur sedan', price: 500, taxRate: 0.05, imageUrl: 'https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?w=200', active: true },
+  { id: 'srv-bse-7', hotelId: 'prop-bookone', name: 'Extra Rollaway Bed', category: 'Extra Bed', description: 'Full-size orthopaedic rollaway bed with linen set', price: 800, taxRate: 0.12, imageUrl: 'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?w=200', active: true },
 ];
 
 export const INITIAL_RESERVATIONS: Reservation[] = [
+  // --- Original Rich Reservations (res-001 through res-012) ---
   {
     id: 'res-001',
     bookingCode: 'AURA-2601',
@@ -840,6 +1039,374 @@ export const INITIAL_RESERVATIONS: Reservation[] = [
     payments: [],
     createdAt: `${subDays(now, 7).toISOString()}`,
   },
+
+  // --- BookOne Suite Reservations ---
+  {
+    id: 'res-bse-101',
+    bookingCode: 'BKO-101',
+    roomId: 'bse-101',
+    categoryId: 'cat-bse-std',
+    guest: {
+      id: 'g-bse-1',
+      fullName: 'Rajesh Sharma',
+      salutation: 'Mr.',
+      email: 'rajesh.sharma@techcorp.in',
+      phone: '+91 98765 43210',
+      country: 'India',
+      idType: 'Aadhaar Card',
+      idNumber: '•••• •••• 4455',
+      vipStatus: false,
+    },
+    checkInDate: yesterday,
+    checkOutDate: dayPlus2,
+    nights: 3,
+    adults: 2,
+    children: 0,
+    source: 'Direct Web',
+    status: 'Checked-In',
+    roomRatePerNight: 2000,
+    discountAmount: 0,
+    folio: [
+      {
+        id: 'fol-bse-1',
+        date: yesterday,
+        department: 'Room Tariff',
+        description: 'Night 1 Standard Room Tariff',
+        amount: 2000,
+        gstRate: 0.12,
+        cgst: 120,
+        sgst: 120,
+        totalWithTax: 2240,
+        postedBy: 'System Night Audit',
+      },
+      {
+        id: 'fol-bse-2',
+        date: today,
+        department: 'Fine Dining',
+        description: 'Buffet Breakfast for 2 Pax',
+        amount: 400,
+        gstRate: 0.05,
+        cgst: 10,
+        sgst: 10,
+        totalWithTax: 420,
+        postedBy: 'POS Terminal 1',
+      }
+    ],
+    payments: [
+      {
+        id: 'pay-bse-1',
+        timestamp: `${yesterday} 15:00`,
+        method: 'UPI',
+        referenceNumber: 'UPI/BKO/2026/01',
+        amount: 2000,
+        notes: 'Advance booking UPI receipt',
+      }
+    ],
+    createdAt: `${subDays(now, 4).toISOString()}`,
+  },
+  {
+    id: 'res-bse-201',
+    bookingCode: 'BKO-201',
+    roomId: 'bse-201',
+    categoryId: 'cat-bse-dlx',
+    guest: {
+      id: 'g-bse-2',
+      fullName: 'Priya Patel',
+      salutation: 'Ms.',
+      email: 'priya.patel@globalind.com',
+      phone: '+91 98123 45678',
+      country: 'India',
+      idType: 'Passport',
+      idNumber: 'IND-P901248',
+      vipStatus: true,
+      specialRequests: 'Quiet room away from lift.',
+    },
+    checkInDate: today,
+    checkOutDate: dayPlus3,
+    nights: 3,
+    adults: 1,
+    children: 0,
+    source: 'MakeMyTrip',
+    channelReferenceId: 'MMT-BKO-9921',
+    status: 'Checked-In',
+    roomRatePerNight: 2500,
+    discountAmount: 250,
+    folio: [
+      {
+        id: 'fol-bse-3',
+        date: today,
+        department: 'Room Tariff',
+        description: 'Night 1 Deluxe Room Tariff',
+        amount: 2250,
+        gstRate: 0.12,
+        cgst: 135,
+        sgst: 135,
+        totalWithTax: 2520,
+        postedBy: 'Front Desk Express',
+      }
+    ],
+    payments: [],
+    createdAt: `${subDays(now, 2).toISOString()}`,
+  },
+  {
+    id: 'res-bse-301',
+    bookingCode: 'BKO-301',
+    roomId: 'bse-301',
+    categoryId: 'cat-bse-super',
+    guest: {
+      id: 'g-bse-3',
+      fullName: 'Amit Verma',
+      salutation: 'Mr.',
+      email: 'amit.verma@consulting.org',
+      phone: '+91 99345 67890',
+      country: 'India',
+      idType: 'Aadhaar Card',
+      idNumber: '•••• •••• 9921',
+      vipStatus: false,
+    },
+    checkInDate: yesterday,
+    checkOutDate: tomorrow,
+    nights: 2,
+    adults: 2,
+    children: 1,
+    source: 'Booking.com',
+    channelReferenceId: 'BDC-BKO-3341',
+    status: 'Checked-In',
+    roomRatePerNight: 3000,
+    discountAmount: 0,
+    folio: [
+      {
+        id: 'fol-bse-4',
+        date: yesterday,
+        department: 'Room Tariff',
+        description: 'Night 1 Super Deluxe Tariff',
+        amount: 3000,
+        gstRate: 0.12,
+        cgst: 180,
+        sgst: 180,
+        totalWithTax: 3360,
+        postedBy: 'System Night Audit',
+      }
+    ],
+    payments: [],
+    createdAt: `${subDays(now, 3).toISOString()}`,
+  },
+  {
+    id: 'res-bse-401',
+    bookingCode: 'BKO-401',
+    roomId: 'bse-401',
+    categoryId: 'cat-bse-suite',
+    guest: {
+      id: 'g-bse-4',
+      fullName: 'Sunita Rao',
+      salutation: 'Mrs.',
+      email: 'sunita.rao@venturehub.in',
+      phone: '+91 98450 11223',
+      country: 'India',
+      idType: 'Passport',
+      idNumber: 'IND-S772190',
+      vipStatus: true,
+      specialRequests: 'Late check-out requested up to 3 PM.',
+    },
+    checkInDate: yesterday,
+    checkOutDate: dayPlus4,
+    nights: 5,
+    adults: 2,
+    children: 0,
+    source: 'Goibibo',
+    channelReferenceId: 'GOI-BKO-1102',
+    status: 'Checked-In',
+    roomRatePerNight: 3500,
+    discountAmount: 350,
+    folio: [
+      {
+        id: 'fol-bse-5',
+        date: yesterday,
+        department: 'Room Tariff',
+        description: 'Night 1 Executive Suite Room Tariff',
+        amount: 3150,
+        gstRate: 0.12,
+        cgst: 189,
+        sgst: 189,
+        totalWithTax: 3528,
+        postedBy: 'System Night Audit',
+      }
+    ],
+    payments: [
+      {
+        id: 'pay-bse-2',
+        timestamp: `${yesterday} 16:30`,
+        method: 'Credit Card',
+        referenceNumber: 'AXIS_TXN_77219',
+        amount: 10000,
+        notes: 'Deposit at check-in',
+      }
+    ],
+    createdAt: `${subDays(now, 5).toISOString()}`,
+  },
+  {
+    id: 'res-bse-103',
+    bookingCode: 'BKO-103',
+    roomId: 'bse-103',
+    categoryId: 'cat-bse-std',
+    guest: {
+      id: 'g-bse-5',
+      fullName: 'Deepak Mohanty',
+      salutation: 'Mr.',
+      email: 'deepak.mohanty@odishabiz.com',
+      phone: '+91 97760 12345',
+      country: 'India',
+      idType: 'Aadhaar Card',
+      idNumber: '•••• •••• 1109',
+      vipStatus: false,
+    },
+    checkInDate: today,
+    checkOutDate: dayPlus2,
+    nights: 2,
+    adults: 1,
+    children: 0,
+    source: 'Agoda',
+    channelReferenceId: 'AGD-BKO-8821',
+    status: 'Confirmed',
+    roomRatePerNight: 2000,
+    discountAmount: 0,
+    folio: [],
+    payments: [],
+    createdAt: `${subDays(now, 1).toISOString()}`,
+  },
+  {
+    id: 'res-bse-403',
+    bookingCode: 'BKO-403',
+    roomId: 'bse-403',
+    categoryId: 'cat-bse-suite',
+    guest: {
+      id: 'g-bse-6',
+      fullName: 'Ananya Sen',
+      salutation: 'Ms.',
+      email: 'ananya.sen@kolkatatech.org',
+      phone: '+91 98300 44556',
+      country: 'India',
+      idType: 'Driving License',
+      idNumber: 'OD-02-2023-99120',
+      vipStatus: true,
+    },
+    checkInDate: tomorrow,
+    checkOutDate: dayPlus5,
+    nights: 4,
+    adults: 2,
+    children: 1,
+    source: 'Expedia',
+    channelReferenceId: 'EXP-BKO-5519',
+    status: 'Confirmed',
+    roomRatePerNight: 3500,
+    discountAmount: 0,
+    folio: [],
+    payments: [],
+    createdAt: `${subDays(now, 2).toISOString()}`,
+  },
+];
+
+export const INITIAL_POS_ORDERS: PosOrder[] = [
+  {
+    id: 'pos-ord-001',
+    hotelId: 'prop-udaipur',
+    orderNumber: 'KOT-2026-101',
+    counterName: 'Royal Darbar Hall',
+    roomId: 'room-101',
+    reservationId: 'res-001',
+    guestName: 'Vikramaditya Singhania',
+    items: [
+      {
+        serviceId: 'srv-1',
+        name: 'Royal Mewar Thali Dinner',
+        quantity: 2,
+        unitPrice: 1800,
+        amount: 3600,
+        taxAmount: 180,
+        totalAmount: 3780,
+      },
+      {
+        serviceId: 'srv-9',
+        name: 'French Press Coffee & Organic Teas',
+        quantity: 2,
+        unitPrice: 220,
+        amount: 440,
+        taxAmount: 22,
+        totalAmount: 462,
+      }
+    ],
+    subtotal: 4040,
+    taxAmount: 202,
+    totalAmount: 4242,
+    paymentStatus: 'BILLED_TO_ROOM',
+    createdAt: `${yesterday} 20:30`,
+  },
+  {
+    id: 'pos-ord-002',
+    hotelId: 'prop-udaipur',
+    orderNumber: 'KOT-2026-102',
+    counterName: 'Guest Experiences',
+    roomId: 'room-301',
+    reservationId: 'res-003',
+    guestName: 'Aarav Mehta',
+    items: [
+      {
+        serviceId: 'srv-3',
+        name: 'Private Sunset Solar Lake Cruise',
+        quantity: 1,
+        unitPrice: 12000,
+        amount: 12000,
+        taxAmount: 2160,
+        totalAmount: 14160,
+      }
+    ],
+    subtotal: 12000,
+    taxAmount: 2160,
+    totalAmount: 14160,
+    paymentStatus: 'BILLED_TO_ROOM',
+    createdAt: `${today} 16:45`,
+  },
+  {
+    id: 'pos-ord-003',
+    hotelId: 'prop-udaipur',
+    orderNumber: 'KOT-2026-103',
+    counterName: 'Terrace Garden Bistro',
+    guestName: 'Walk-in Restaurant Guest',
+    items: [
+      {
+        serviceId: 'srv-6',
+        name: 'Gourmet Buffet Breakfast Spread',
+        quantity: 2,
+        unitPrice: 450,
+        amount: 900,
+        taxAmount: 45,
+        totalAmount: 945,
+      }
+    ],
+    subtotal: 900,
+    taxAmount: 45,
+    totalAmount: 945,
+    paymentStatus: 'PAID',
+    paymentMethod: 'UPI',
+    createdAt: `${today} 09:15`,
+  },
+];
+
+export const INITIAL_NIGHT_AUDIT_LOGS: NightAuditReport[] = [
+  {
+    id: 'audit-rep-001',
+    hotelId: 'prop-udaipur',
+    auditDate: yesterday,
+    runBy: 'Night Auditor System (Automated)',
+    occupiedRooms: 9,
+    totalRooms: 17,
+    occupancyRate: 52.9,
+    roomRevenue: 348700,
+    posRevenue: 47945,
+    totalRevenue: 465065,
+    taxCollected: 68420,
+    createdAt: `${today} 02:30`,
+  }
 ];
 
 export const INITIAL_CHANNELS: ChannelConnection[] = [
@@ -882,6 +1449,26 @@ export const INITIAL_CHANNELS: ChannelConnection[] = [
     pendingSyncCount: 0,
     activeRatePlan: 'Direct Connect VIP',
     commissionRate: 14,
+  },
+  {
+    id: 'chan-exp',
+    name: 'Expedia',
+    slug: 'expedia',
+    status: 'Connected',
+    lastSyncTime: '12 mins ago',
+    pendingSyncCount: 0,
+    activeRatePlan: 'Expedia Partner Network',
+    commissionRate: 16,
+  },
+  {
+    id: 'chan-abnb',
+    name: 'Airbnb',
+    slug: 'airbnb',
+    status: 'Connected',
+    lastSyncTime: '15 mins ago',
+    pendingSyncCount: 0,
+    activeRatePlan: 'Luxury Villas & Sovereign Suites',
+    commissionRate: 12,
   },
   {
     id: 'chan-dir',
@@ -927,6 +1514,13 @@ export const INITIAL_PROMO_CODES: PromoCode[] = [
     minimumNights: 3,
     validUntil: '2026-12-31',
   },
+  {
+    code: 'AURAWELCOME',
+    description: '10% Welcome Discount for Direct Travelers',
+    discountType: 'PERCENTAGE',
+    value: 10,
+    validUntil: '2026-12-31',
+  },
 ];
 
 export const INITIAL_SYNC_LOGS: SyncLog[] = [
@@ -960,5 +1554,24 @@ export const INITIAL_SYNC_LOGS: SyncLog[] = [
     rawPayloadSnippet: '{"check":"RATE_PARITY","status":"COMPLIANT","channelsChecked":4,"toleranceINR":0}',
     status: 'SUCCESS',
   },
+  {
+    id: 'log-004',
+    timestamp: '20:45:10',
+    type: 'INBOUND',
+    channel: 'Booking.com',
+    action: 'OTA_RESERVATION_PUSH',
+    details: 'Received booking payload for Royal Heritage Suite (Guest: Lady Eleanor Cavendish)',
+    rawPayloadSnippet: '{"provider":"BDC","channelRef":"BDC-LON-993817","roomType":"RHS","rate":28000,"currency":"INR","status":"CONFIRMED"}',
+    status: 'SUCCESS',
+  },
+  {
+    id: 'log-005',
+    timestamp: '20:30:00',
+    type: 'OUTBOUND',
+    channel: 'CENTRAL_GATEWAY',
+    action: 'CHANNEL_ARI_UPDATE',
+    details: 'Pushed ARI (Availability, Rates & Inventory) batch to all 6 connected OTAs',
+    rawPayloadSnippet: '{"channels":["MMT","BDC","GOI","AGD","EXP","ABNB"],"status":"SYNCED"}',
+    status: 'SUCCESS',
+  },
 ];
-

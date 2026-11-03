@@ -15,11 +15,24 @@ export default defineConfig({
     port: 3000,
     host: true,
     allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5050',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   preview: {
     port: 3000,
     host: true,
     allowedHosts: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5050',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 });
-

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { usePmsStore } from '../../store/usePmsStore';
-import { Reservation } from '../../types/hotel';
+import { Reservation, Room, RoomCategory } from '../../types/hotel';
 import { formatINR } from '../../utils/currency';
 import { formatDateEditorial, getTodayStr } from '../../utils/dateUtils';
 import { OtaLogo } from '../common/OtaLogo';
@@ -13,21 +13,27 @@ import {
   ShieldCheck, 
   CheckCircle2, 
   X,
-  CreditCard
+  CreditCard,
+  Plus,
+  BedDouble,
+  Clock,
+  Phone
 } from 'lucide-react';
+import { QuickReservationModal } from '../tape-chart/QuickReservationModal';
 
 interface FrontDeskManagerProps {
   onOpenFolio: (reservationId: string) => void;
 }
 
 export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio }) => {
-  const { reservations, checkInGuest, rooms, categories } = usePmsStore();
+  const { reservations, checkInGuest, rooms, categories, selectedDate } = usePmsStore();
 
   const [activeTab, setActiveTab] = useState<'arrivals' | 'inhouse' | 'departures' | 'all'>('arrivals');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVerificationRes, setSelectedVerificationRes] = useState<Reservation | null>(null);
+  const [showWalkInModal, setShowWalkInModal] = useState(false);
 
-  const todayStr = getTodayStr();
+  const todayStr = selectedDate || getTodayStr();
 
   // Filters
   const arrivals = reservations.filter(
@@ -58,115 +64,121 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
   };
 
   const getCategoryName = (catId: string) => {
-    return categories.find((c) => c.id === catId)?.name || 'Palatial Suite';
+    const cat = categories.find((c) => c.id === catId);
+    return cat ? cat.name : 'Standard';
   };
 
+  const availableRoomForWalkIn = rooms.find((r) => r.status === 'Available') || rooms[0];
+  const availableCatForWalkIn = categories.find((c) => c.id === availableRoomForWalkIn?.categoryId) || categories[0];
+
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#FAFAF8]">
-      {/* Top Banner & Quick KPI Strip */}
-      <div className="p-6 border-b border-stone-200 bg-white shadow-soft-luxury">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h2 className="font-serif text-2xl font-bold tracking-tight text-stone-900 flex items-center gap-2">
-              <UserCheck className="w-6 h-6 text-[#B48C36]" />
-              Front-Desk Operations & Guest Concierge
-            </h2>
-            <p className="text-xs text-stone-600 mt-1">
-              Verify guest Aadhaar/Passport identification, allocate physical suite keycards, manage active folios, and process checkout settlement.
-            </p>
-          </div>
-
-          {/* Quick Metrics Strip */}
-          <div className="flex items-center gap-3">
-            <div className="px-4 py-2.5 rounded-2xl bg-purple-50 border border-purple-200 flex items-center gap-3 shadow-sm">
-              <LogIn className="w-4 h-4 text-purple-700" />
-              <div>
-                <p className="text-[10px] font-mono uppercase text-stone-500 font-bold">Expected Arrivals</p>
-                <p className="font-mono font-bold text-sm text-purple-900">{arrivals.length} Guests</p>
-              </div>
-            </div>
-
-            <div className="px-4 py-2.5 rounded-2xl bg-rose-50 border border-rose-200 flex items-center gap-3 shadow-sm">
-              <UserCheck className="w-4 h-4 text-rose-700" />
-              <div>
-                <p className="text-[10px] font-mono uppercase text-stone-500 font-bold">In-House Active</p>
-                <p className="font-mono font-bold text-sm text-rose-900">{inHouse.length} Suites</p>
-              </div>
-            </div>
-
-            <div className="px-4 py-2.5 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3 shadow-sm">
-              <LogOut className="w-4 h-4 text-amber-700" />
-              <div>
-                <p className="text-[10px] font-mono uppercase text-stone-500 font-bold">Pending Departures</p>
-                <p className="font-mono font-bold text-sm text-amber-900">{departures.length} Guests</p>
-              </div>
-            </div>
+    <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#FAFAF8] p-3 sm:p-6 space-y-4 sm:space-y-6">
+      {/* KPI Operations Header */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200 shadow-sm">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400 font-bold block mb-1">
+            Expected Arrivals
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl sm:text-2xl font-serif font-bold text-stone-900">{arrivals.length}</span>
+            <span className="text-[10px] font-mono text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full font-bold">
+              Pending Check-In
+            </span>
           </div>
         </div>
 
-        {/* Tab Selector & Search bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mt-6 pt-4 border-t border-stone-200">
-          <div className="flex items-center gap-1.5 bg-stone-100 p-1.5 rounded-2xl border border-stone-200">
-            <button
-              onClick={() => setActiveTab('arrivals')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-serif font-bold transition-all ${
-                activeTab === 'arrivals'
-                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Arrivals ({arrivals.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('inhouse')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-serif font-bold transition-all ${
-                activeTab === 'inhouse'
-                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              In-House ({inHouse.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('departures')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-serif font-bold transition-all ${
-                activeTab === 'departures'
-                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Departures ({departures.length})
-            </button>
-
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`px-4 py-1.5 rounded-xl text-xs font-serif font-bold transition-all ${
-                activeTab === 'all'
-                  ? 'bg-white text-stone-900 shadow-sm border border-stone-200'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              All Records ({reservations.length})
-            </button>
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200 shadow-sm">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400 font-bold block mb-1">
+            In-House In Residence
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl sm:text-2xl font-serif font-bold text-emerald-700">{inHouse.length}</span>
+            <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-bold">
+              Active Folios
+            </span>
           </div>
+        </div>
 
-          <div className="relative min-w-[280px]">
-            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              placeholder="Search by name, booking code, suite, phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-[#B48C36] outline-none"
-            />
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200 shadow-sm">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400 font-bold block mb-1">
+            Due Departures
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl sm:text-2xl font-serif font-bold text-stone-900">{departures.length}</span>
+            <span className="text-[10px] font-mono text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full font-bold">
+              Due Today
+            </span>
+          </div>
+        </div>
+
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200 shadow-sm">
+          <span className="text-[10px] font-mono uppercase tracking-wider text-stone-400 font-bold block mb-1">
+            Total Inventory Units
+          </span>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl sm:text-2xl font-serif font-bold text-[#936F25]">{rooms.length}</span>
+            <span className="text-[10px] font-mono text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full font-bold">
+              4 Floors
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Main Reservation Cards List */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-3">
+      {/* Navigation Controls Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-2xl border border-stone-200 shadow-sm">
+        {/* Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+          {[
+            { id: 'arrivals', label: 'Expected Arrivals', count: arrivals.length },
+            { id: 'inhouse', label: 'In-House Guests', count: inHouse.length },
+            { id: 'departures', label: 'Expected Departures', count: departures.length },
+            { id: 'all', label: 'All Reservations', count: reservations.length },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-[#FAF6EC] text-[#936F25] border border-[#B48C36]/50 shadow-sm'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+              }`}
+            >
+              <span>{tab.label}</span>
+              <span className={`px-1.5 py-0.2 rounded-full font-mono text-[9px] ${
+                activeTab === tab.id ? 'bg-[#B48C36]/20 text-[#936F25]' : 'bg-stone-100 text-stone-600'
+              }`}>
+                {tab.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Right Search & Walk-In Button */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 sm:w-56">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              placeholder="Guest, code, phone, room..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-800 focus:outline-none focus:border-[#B48C36]"
+            />
+          </div>
+
+          <button
+            onClick={() => setShowWalkInModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#B48C36] hover:bg-[#936F25] text-white text-xs font-serif font-bold transition-all shadow-sm shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">New Walk-In</span>
+            <span className="sm:hidden">Walk-In</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Reservation Cards List */}
+      <div className="flex-1 overflow-y-auto space-y-3 pr-1">
         {currentList().map((res) => {
           const roomUnit = rooms.find((r) => r.id === res.roomId);
           const categoryName = getCategoryName(res.categoryId);
@@ -174,74 +186,83 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
           return (
             <div
               key={res.id}
-              className="p-5 rounded-2xl bg-white border border-stone-200 hover:border-[#B48C36]/50 transition-all shadow-soft-luxury flex flex-col md:flex-row items-start md:items-center justify-between gap-4 group"
+              className="p-4 rounded-2xl bg-white border border-stone-200 hover:border-[#B48C36]/40 shadow-sm transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 group"
             >
-              {/* Left: Guest & Room Info */}
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-[#FAF6EC] border border-[#B48C36]/30 flex items-center justify-center font-serif text-lg font-bold text-[#B48C36] flex-shrink-0 shadow-sm">
-                  {res.guest.fullName.charAt(0)}
+              {/* Left Guest Info */}
+              <div className="flex items-start gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center shrink-0">
+                  <OtaLogo source={res.source} size="md" />
                 </div>
 
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-serif font-bold text-base text-stone-900 group-hover:text-[#B48C36] transition-colors">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-serif text-sm font-bold text-stone-900 group-hover:text-[#936F25] transition-colors truncate">
                       {res.guest.salutation} {res.guest.fullName}
-                    </h3>
+                    </span>
                     {res.guest.vipStatus && (
-                      <span className="flex items-center gap-1 text-[9px] font-mono text-[#936F25] bg-[#FAF6EC] border border-[#B48C36]/30 px-2 py-0.5 rounded-full font-bold">
-                        <Sparkles className="w-2.5 h-2.5 text-[#B48C36]" />
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded-full font-bold">
                         VIP
                       </span>
                     )}
-                    <OtaLogo channel={res.source} size="xs" />
+                    <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${
+                      res.status === 'Checked-In'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : res.status === 'Confirmed'
+                        ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                        : 'bg-stone-100 text-stone-600'
+                    }`}>
+                      {res.status}
+                    </span>
                   </div>
 
-                  <p className="text-xs text-stone-600 mt-0.5">
-                    Suite {roomUnit?.roomNumber || res.roomId.replace('room-', '')} • {categoryName}
+                  <p className="text-xs text-stone-600 font-serif mt-0.5">
+                    Room {roomUnit?.roomNumber || res.roomId.replace('bse-', '')} • {categoryName}
                   </p>
 
-                  <div className="flex items-center gap-3 text-[11px] font-mono text-stone-500 mt-1">
+                  <div className="flex items-center gap-2 sm:gap-3 text-[11px] font-mono text-stone-500 mt-1 flex-wrap">
                     <span>Code: <strong className="text-stone-800">{res.bookingCode}</strong></span>
                     <span>•</span>
-                    <span>
-                      {formatDateEditorial(res.checkInDate)} – {formatDateEditorial(res.checkOutDate)} ({res.nights} nts)
-                    </span>
+                    <span>{formatDateEditorial(res.checkInDate)} – {formatDateEditorial(res.checkOutDate)} ({res.nights} nts)</span>
                     <span>•</span>
-                    <span>{res.guest.phone}</span>
+                    <span className="flex items-center gap-1">
+                      <Phone className="w-2.5 h-2.5 text-stone-400" />
+                      {res.guest.phone}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Center: ID Verification & Folio Summary */}
-              <div className="flex items-center gap-6">
-                <div className="text-right font-mono">
-                  <p className="text-[10px] text-stone-500 uppercase font-bold">Tariff / Night</p>
+              {/* Right: Actions & Folio Details */}
+              <div className="flex flex-wrap items-center justify-between lg:justify-end gap-3 sm:gap-4 pt-3 lg:pt-0 border-t lg:border-t-0 border-stone-100">
+                <div className="text-left lg:text-right font-mono">
+                  <p className="text-[10px] text-stone-400 uppercase font-bold">Rate / Night</p>
                   <p className="text-xs font-bold text-stone-900">{formatINR(res.roomRatePerNight)}</p>
-                  <p className="text-[10px] text-[#936F25] font-semibold">{res.folio.length} Posted Folio Items</p>
+                  <p className="text-[10px] text-[#936F25] font-semibold">{res.folio.length} Posted Items</p>
                 </div>
 
-                {/* ID Preview Trigger */}
-                <button
-                  onClick={() => setSelectedVerificationRes(res)}
-                  className="px-3.5 py-2 rounded-xl bg-stone-50 border border-stone-200 hover:border-[#B48C36] text-xs text-stone-700 hover:text-[#936F25] flex items-center gap-1.5 transition-colors font-medium shadow-sm"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Verify ID</span>
-                </button>
-
-                {/* Operational Actions */}
                 <div className="flex items-center gap-2">
+                  {/* Verify ID Button */}
                   <button
-                    onClick={() => onOpenFolio(res.id)}
-                    className="px-3.5 py-2 rounded-xl bg-[#FAF6EC] border border-[#B48C36] text-[#936F25] hover:bg-[#F7F0DF] text-xs font-serif font-bold transition-colors shadow-sm"
+                    onClick={() => setSelectedVerificationRes(res)}
+                    className="px-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 hover:border-[#B48C36] text-xs text-stone-700 hover:text-[#936F25] flex items-center gap-1.5 transition-colors font-medium shadow-sm"
                   >
-                    View Folio
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Verify ID</span>
                   </button>
 
+                  {/* View Folio */}
+                  <button
+                    onClick={() => onOpenFolio(res.id)}
+                    className="px-3 py-1.5 rounded-xl bg-[#FAF6EC] border border-[#B48C36]/50 text-[#936F25] hover:bg-[#F5EDD6] text-xs font-serif font-bold transition-colors shadow-sm"
+                  >
+                    Folio
+                  </button>
+
+                  {/* Check-In / Check-Out Actions */}
                   {res.status === 'Confirmed' && (
                     <button
                       onClick={() => checkInGuest(res.id)}
-                      className="px-4 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-serif font-bold hover:bg-emerald-100 transition-all flex items-center gap-1.5 shadow-sm"
+                      className="px-3.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-serif font-bold hover:bg-emerald-100 transition-all flex items-center gap-1 shadow-sm"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Check-In</span>
@@ -251,7 +272,7 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
                   {res.status === 'Checked-In' && (
                     <button
                       onClick={() => onOpenFolio(res.id)}
-                      className="px-4 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-serif font-bold hover:bg-rose-100 transition-all flex items-center gap-1.5 shadow-sm"
+                      className="px-3.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-serif font-bold hover:bg-rose-100 transition-all flex items-center gap-1 shadow-sm"
                     >
                       <LogOut className="w-3.5 h-3.5 text-rose-600" />
                       <span>Check-Out</span>
@@ -280,7 +301,7 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
               <div className="flex items-center gap-2 text-[#936F25]">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
                 <h4 className="font-serif font-bold text-stone-900 text-sm">
-                  Government Identity Document Verification
+                  Government Identity Verification
                 </h4>
               </div>
               <button
@@ -291,8 +312,8 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
               </button>
             </div>
 
-            {/* High-res Sovereign Mock ID Card (Light Luxury Edition) */}
-            <div className="p-5 rounded-2xl bg-[#FAF6EC] border border-[#B48C36]/30 shadow-sm relative overflow-hidden">
+            {/* Document Preview Card */}
+            <div className="p-4 rounded-2xl bg-[#FAF6EC] border border-[#B48C36]/30 shadow-sm relative overflow-hidden">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex items-center gap-2">
                   <div className="w-7 h-7 rounded-md bg-[#B48C36]/20 border border-[#B48C36]/40 flex items-center justify-center text-[10px] font-bold text-[#936F25]">
@@ -330,24 +351,13 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
                     {selectedVerificationRes.guest.idNumber}
                   </p>
                   <p className="text-[11px] text-stone-600 font-mono">
-                    DOB: 14 Aug 1988 • Gender: Verified
+                    DOB: 14 Aug 1988 • Nationality: {selectedVerificationRes.guest.country}
                   </p>
                   <p className="text-[10px] text-stone-500">
-                    Address: {selectedVerificationRes.guest.country} Residence Protocol
+                    Phone: {selectedVerificationRes.guest.phone}
                   </p>
                 </div>
               </div>
-
-              <div className="mt-4 pt-2 border-t border-[#B48C36]/20 flex justify-between items-center text-[10px] font-mono text-stone-500">
-                <span>Guest UID: {selectedVerificationRes.guest.id}</span>
-                <span className="text-[#936F25] font-bold">Biometric Pass Verified</span>
-              </div>
-            </div>
-
-            {/* Verification details */}
-            <div className="text-xs space-y-1 text-stone-600 font-mono">
-              <p>Special Requests: {selectedVerificationRes.guest.specialRequests || 'None recorded'}</p>
-              <p>Dietary Preference: {selectedVerificationRes.guest.dietaryPreferences || 'Standard Royal Luxury Menu'}</p>
             </div>
 
             {/* Action button */}
@@ -358,7 +368,7 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
                     checkInGuest(selectedVerificationRes.id);
                     setSelectedVerificationRes(null);
                   }}
-                  className="w-full py-2.5 rounded-xl bg-[#B48C36] hover:bg-[#C5A059] text-stone-900 font-serif font-bold text-xs shadow-gold-glow"
+                  className="w-full py-2.5 rounded-xl bg-[#B48C36] hover:bg-[#936F25] text-white font-serif font-bold text-xs shadow-sm"
                 >
                   Approve ID & Check-In Guest Immediately
                 </button>
@@ -368,12 +378,22 @@ export const FrontDeskManager: React.FC<FrontDeskManagerProps> = ({ onOpenFolio 
                   onClick={() => setSelectedVerificationRes(null)}
                   className="w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-serif"
                 >
-                  Close Verification Window
+                  Close Verification
                 </button>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* Walk-in Reservation Modal */}
+      {showWalkInModal && availableRoomForWalkIn && availableCatForWalkIn && (
+        <QuickReservationModal
+          room={availableRoomForWalkIn}
+          category={availableCatForWalkIn}
+          initialDate={todayStr}
+          onClose={() => setShowWalkInModal(false)}
+        />
       )}
     </div>
   );

@@ -6,29 +6,32 @@ import { format, addDays } from 'date-fns';
 import { formatINR } from '../../utils/currency';
 import { calculateReservationTotals } from '../../utils/taxEngine';
 
-interface QuickReservationModalProps {
+export interface QuickReservationModalProps {
   room: Room;
   category: RoomCategory;
-  initialCheckInDate: string;
+  initialCheckInDate?: string;
+  initialDate?: string;
   onClose: () => void;
-  onSuccess: (resId: string) => void;
+  onSuccess?: (resId: string) => void;
 }
 
 export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
   room,
   category,
   initialCheckInDate,
+  initialDate,
   onClose,
   onSuccess,
 }) => {
   const { createReservation, promoCodes } = usePmsStore();
 
+  const effectiveStartDate = initialDate || initialCheckInDate || format(new Date(), 'yyyy-MM-dd');
   const [guestName, setGuestName] = useState('');
   const [salutation, setSalutation] = useState<'Mr.' | 'Ms.' | 'Mrs.' | 'Dr.' | 'Lord'>('Mr.');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('+91 ');
   const [country] = useState('India');
-  const [checkInDate, setCheckInDate] = useState(initialCheckInDate);
+  const [checkInDate, setCheckInDate] = useState(effectiveStartDate);
   const [nights, setNights] = useState(2);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
@@ -38,26 +41,32 @@ export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
   const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
   const [specialRequests, setSpecialRequests] = useState('');
 
+  // Auto-compute checkOut
   const checkOutDate = format(addDays(new Date(checkInDate), nights), 'yyyy-MM-dd');
 
+  // Handle promo code
   let discountAmount = 0;
   if (appliedPromo) {
-    const found = promoCodes.find((p) => p.code.toUpperCase() === appliedPromo.toUpperCase());
-    if (found) {
-      if (found.discountType === 'PERCENTAGE') {
-        discountAmount = Math.round((category.basePrice * nights * found.value) / 100);
+    const promo = promoCodes.find((p) => p.code.toUpperCase() === appliedPromo.toUpperCase());
+    if (promo) {
+      if (promo.discountType === 'PERCENTAGE') {
+        discountAmount = Math.round((category.basePrice * nights * promo.value) / 100);
       } else {
-        discountAmount = found.value;
+        discountAmount = promo.value;
       }
     }
   }
 
-  const totals = calculateReservationTotals(category.basePrice, nights, discountAmount);
+  const totals = calculateReservationTotals(
+    category.basePrice,
+    nights,
+    discountAmount
+  );
 
   const handleApplyPromo = () => {
-    const found = promoCodes.find((p) => p.code.toUpperCase() === promoCodeInput.trim().toUpperCase());
-    if (found) {
-      setAppliedPromo(found.code);
+    const promo = promoCodes.find((p) => p.code.toUpperCase() === promoCodeInput.trim().toUpperCase());
+    if (promo) {
+      setAppliedPromo(promo.code);
     } else {
       alert('Invalid Promo Code');
     }
@@ -65,20 +74,17 @@ export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!guestName.trim()) {
-      alert('Please enter guest name');
-      return;
-    }
+    if (!guestName.trim()) return;
 
     const newRes = createReservation({
       roomId: room.id,
       categoryId: category.id,
       guest: {
         id: `g-${Date.now()}`,
-        fullName: guestName,
+        fullName: guestName.trim(),
         salutation,
-        email: email || `${guestName.toLowerCase().replace(/\s+/g, '.')}@luxuryguest.com`,
-        phone: phone || '+91 98000 00000',
+        email: email.trim() || `${guestName.toLowerCase().replace(/\s+/g, '')}@guest.in`,
+        phone: phone.trim(),
         country,
         idType: 'Aadhaar Card',
         idNumber: '•••• •••• ' + Math.floor(1000 + Math.random() * 9000),
@@ -97,7 +103,10 @@ export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
       notes: specialRequests,
     });
 
-    onSuccess(newRes.id);
+    if (onSuccess) {
+      onSuccess(newRes.id);
+    }
+    onClose();
   };
 
   return (
@@ -112,7 +121,7 @@ export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
             <div>
               <h3 className="font-serif font-bold text-base text-stone-900">Walk-In & Front-Desk Booking</h3>
               <p className="text-xs text-stone-600 font-mono">
-                Suite {room.roomNumber} • {category.name} ({category.tier})
+                Room {room.roomNumber} • {category.name} ({category.tier})
               </p>
             </div>
           </div>
@@ -154,149 +163,131 @@ export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Maharaja Yuvraj Singh"
+                  placeholder="e.g. Ramesh Chandra Verma"
                   value={guestName}
                   onChange={(e) => setGuestName(e.target.value)}
                   className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 placeholder:text-stone-400 focus:border-[#B48C36] outline-none"
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
+              <div className="col-span-6">
+                <label className="text-[11px] text-stone-600 block mb-1">Mobile / WhatsApp *</label>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="col-span-6">
                 <label className="text-[11px] text-stone-600 block mb-1">Email Address</label>
                 <div className="relative">
-                  <Mail className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
+                  <Mail className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="email"
                     placeholder="guest@domain.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2 text-xs text-stone-900 placeholder:text-stone-400 focus:border-[#B48C36] outline-none"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none"
                   />
                 </div>
               </div>
-
-              <div>
-                <label className="text-[11px] text-stone-600 block mb-1">Mobile / WhatsApp</label>
-                <div className="relative">
-                  <Phone className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2 text-xs text-stone-900 font-mono focus:border-[#B48C36] outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="checkbox"
-                id="vipCheck"
-                checked={vipStatus}
-                onChange={(e) => setVipStatus(e.target.checked)}
-                className="rounded accent-[#B48C36]"
-              />
-              <label htmlFor="vipCheck" className="text-xs text-stone-700 flex items-center gap-1.5 cursor-pointer font-medium">
-                <Sparkles className="w-3.5 h-3.5 text-[#B48C36]" />
-                Flag as VIP Sovereign Dignitary
-              </label>
             </div>
           </div>
 
-          <div className="border-t border-stone-200 pt-4 space-y-3">
+          {/* Stay Configuration */}
+          <div className="space-y-3 pt-3 border-t border-stone-200">
             <h4 className="text-xs font-mono uppercase tracking-wider text-[#936F25] font-bold flex items-center gap-2">
               <Calendar className="w-3.5 h-3.5" />
-              Stay Dates & Booking Source
+              Stay Dates & Occupancy
             </h4>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
+            <div className="grid grid-cols-12 gap-3">
+              <div className="col-span-5">
                 <label className="text-[11px] text-stone-600 block mb-1">Check-In Date</label>
                 <input
                   type="date"
                   value={checkInDate}
                   onChange={(e) => setCheckInDate(e.target.value)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none font-mono"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 font-mono focus:border-[#B48C36] outline-none"
                 />
               </div>
 
-              <div>
-                <label className="text-[11px] text-stone-600 block mb-1">Nights Duration</label>
+              <div className="col-span-3">
+                <label className="text-[11px] text-stone-600 block mb-1">Duration (Nights)</label>
                 <input
                   type="number"
-                  min="1"
-                  max="30"
+                  min={1}
+                  max={30}
                   value={nights}
                   onChange={(e) => setNights(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none font-mono"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 font-mono text-center focus:border-[#B48C36] outline-none"
                 />
               </div>
 
-              <div>
+              <div className="col-span-4">
                 <label className="text-[11px] text-stone-600 block mb-1">Check-Out Date</label>
                 <input
                   type="text"
-                  disabled
+                  readOnly
                   value={checkOutDate}
-                  className="w-full bg-stone-100 border border-stone-200 rounded-lg px-2.5 py-2 text-xs text-stone-600 font-mono font-bold"
+                  className="w-full bg-stone-100 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-600 font-mono"
                 />
               </div>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="text-[11px] text-stone-600 block mb-1">Adults</label>
-                <select
+              <div className="col-span-4">
+                <label className="text-[11px] text-stone-600 block mb-1">Adults (Max {category.maxAdults})</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={category.maxAdults}
                   value={adults}
-                  onChange={(e) => setAdults(parseInt(e.target.value))}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none"
-                >
-                  <option value="1">1 Adult</option>
-                  <option value="2">2 Adults</option>
-                  <option value="3">3 Adults</option>
-                  <option value="4">4 Adults</option>
-                </select>
+                  onChange={(e) => setAdults(parseInt(e.target.value) || 1)}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 text-center font-mono focus:border-[#B48C36] outline-none"
+                />
               </div>
 
-              <div>
-                <label className="text-[11px] text-stone-600 block mb-1">Children</label>
-                <select
+              <div className="col-span-4">
+                <label className="text-[11px] text-stone-600 block mb-1">Children (Max {category.maxChildren})</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={category.maxChildren}
                   value={children}
-                  onChange={(e) => setChildren(parseInt(e.target.value))}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none"
-                >
-                  <option value="0">0 Children</option>
-                  <option value="1">1 Child</option>
-                  <option value="2">2 Children</option>
-                </select>
+                  onChange={(e) => setChildren(parseInt(e.target.value) || 0)}
+                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 text-center font-mono focus:border-[#B48C36] outline-none"
+                />
               </div>
 
-              <div>
-                <label className="text-[11px] text-stone-600 block mb-1">Booking Channel</label>
+              <div className="col-span-4">
+                <label className="text-[11px] text-stone-600 block mb-1">Booking Origin Channel</label>
                 <select
                   value={source}
                   onChange={(e) => setSource(e.target.value as any)}
                   className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none font-medium"
                 >
-                  <option value="Walk-In">Front-Desk Walk-In</option>
-                  <option value="Direct Web">Direct Web</option>
+                  <option value="Walk-In">Walk-In (Front Desk)</option>
+                  <option value="Direct Web">Direct Web Booking</option>
                   <option value="MakeMyTrip">MakeMyTrip</option>
                   <option value="Booking.com">Booking.com</option>
                   <option value="Goibibo">Goibibo</option>
                   <option value="Agoda">Agoda</option>
+                  <option value="Corporate">Corporate Account</option>
                 </select>
               </div>
             </div>
           </div>
 
-          {/* Pricing & GST Engine */}
-          <div className="border-t border-stone-200 pt-4 space-y-3">
+          {/* Pricing Ledger & Indian GST Summary */}
+          <div className="space-y-3 pt-3 border-t border-stone-200">
             <h4 className="text-xs font-mono uppercase tracking-wider text-[#936F25] font-bold flex items-center justify-between">
               <span className="flex items-center gap-2">
-                <Tag className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 text-[#B48C36]" />
                 Indian GST & Financial Calculation
               </span>
               <span className="text-[10px] text-stone-500 font-sans">
@@ -332,7 +323,7 @@ export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
             <label className="text-[11px] text-stone-600 block mb-1">Special Preferences / Notes</label>
             <textarea
               rows={2}
-              placeholder="e.g. Early check-in, feather-free pillows..."
+              placeholder="e.g. Early check-in, quiet corner room..."
               value={specialRequests}
               onChange={(e) => setSpecialRequests(e.target.value)}
               className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-900 focus:border-[#B48C36] outline-none"
@@ -350,7 +341,7 @@ export const QuickReservationModal: React.FC<QuickReservationModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-[#B48C36] hover:bg-[#C5A059] text-stone-900 font-serif font-bold text-xs shadow-gold-glow transition-all"
+              className="px-5 py-2.5 rounded-xl bg-[#B48C36] hover:bg-[#936F25] text-white font-serif font-bold text-xs transition-all shadow-sm"
             >
               Confirm Reservation & Post Folio
             </button>

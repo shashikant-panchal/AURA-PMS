@@ -7,29 +7,37 @@ import {
   Reservation, 
   ChannelConnection, 
   PromoCode, 
-  SyncLog,
-  RoomStatus,
-  CleanlinessStatus,
-  PaymentMethod,
-  FolioItem,
-  FolioPayment,
-  BookingSource,
-  AuthUser,
-  HotelTenant,
-  UserRole
+  SyncLog, 
+  RoomStatus, 
+  CleanlinessStatus, 
+  PaymentMethod, 
+  FolioItem, 
+  FolioPayment, 
+  BookingSource, 
+  AuthUser, 
+  HotelTenant, 
+  UserRole,
+  PosService,
+  PosOrder,
+  NightAuditReport,
+  DatabaseStatus
 } from '../types/hotel';
 import { 
   INITIAL_PROPERTIES, 
   INITIAL_CATEGORIES, 
   INITIAL_ROOMS, 
+  INITIAL_SERVICES,
   INITIAL_RESERVATIONS, 
   INITIAL_CHANNELS, 
   INITIAL_PROMO_CODES, 
-  INITIAL_SYNC_LOGS,
-  MOCK_ACCOUNTS,
-  MockAccount
+  INITIAL_SYNC_LOGS, 
+  INITIAL_POS_ORDERS,
+  INITIAL_NIGHT_AUDIT_LOGS,
+  MOCK_ACCOUNTS, 
+  MockAccount 
 } from '../mock/hotelData';
 import { calculateItemGst, getRoomGstRate } from '../utils/taxEngine';
+import { pmsApi } from '../services/api';
 import { format, addDays } from 'date-fns';
 
 export interface ToastMessage {
@@ -47,7 +55,7 @@ export interface AuraPmsState {
   login: (email: string, pass: string) => { success: boolean; redirectUrl: string; message?: string };
   logout: () => void;
 
-  // Multi-Tenant SaaS State
+  // Multi-Tenant State
   hotels: HotelTenant[];
   properties: HotelTenant[];
   activePropertyId: string;
@@ -56,22 +64,33 @@ export interface AuraPmsState {
   provisionAdminUser: (name: string, email: string, hotelId: string) => void;
   toggleHotelStatus: (hotelId: string) => void;
 
+  // Inventory & Core PMS State
   categories: RoomCategory[];
   rooms: Room[];
   reservations: Reservation[];
   channels: ChannelConnection[];
   promoCodes: PromoCode[];
   syncLogs: SyncLog[];
-  selectedDate: string; // Current calendar anchor date
-  stopSells: Record<string, boolean>; // categoryId -> boolean
-  channelStopSells: Record<string, boolean>; // `${channelSlug}_${categoryId}` -> boolean
+  posServices: PosService[];
+  posOrders: PosOrder[];
+  nightAuditReports: NightAuditReport[];
+  selectedDate: string;
+  stopSells: Record<string, boolean>;
+  channelStopSells: Record<string, boolean>;
   toasts: ToastMessage[];
+
+  // Local SQLite Database State
+  dbStatus: DatabaseStatus;
+  checkDatabaseStatus: () => Promise<void>;
+  syncWithSqliteBackend: () => Promise<void>;
+  reseedSqliteDatabase: () => Promise<void>;
 
   // Actions
   setActiveProperty: (id: string) => void;
   setSelectedDate: (date: string) => void;
   updateRoomStatus: (roomId: string, status: RoomStatus) => void;
   updateCleanliness: (roomId: string, cleanliness: CleanlinessStatus) => void;
+  updateRoomMaintenance: (roomId: string, note?: string) => void;
   createReservation: (data: {
     roomId: string;
     categoryId: string;
@@ -113,9 +132,22 @@ export interface AuraPmsState {
     codeStr: string
   ) => { success: boolean; message: string; discountAmount: number };
   toggleStopSell: (categoryId: string, channelSlug?: string) => void;
+  createPosOrder: (order: {
+    counterName: string;
+    roomId?: string;
+    reservationId?: string;
+    guestName: string;
+    items: PosOrder['items'];
+    subtotal: number;
+    taxAmount: number;
+    totalAmount: number;
+    paymentStatus: 'PAID' | 'BILLED_TO_ROOM';
+    paymentMethod?: PaymentMethod;
+  }) => PosOrder;
+  runNightAudit: (runBy?: string) => Promise<{ success: boolean; message: string; report?: NightAuditReport }>;
   simulateOtaInbound: (channel: 'MakeMyTrip' | 'Booking.com' | 'Goibibo' | 'Agoda') => Reservation | null;
-  simulateOtaBooking: (source: 'MAKEMYTRIP' | 'GOIBIBO' | 'BOOKING_COM') => void;
   simulateDirectBooking: () => Reservation | null;
+  triggerRateParitySync: () => void;
   bookFromGuestPortal: (bookingData: {
     categoryId: string;
     guestName: string;
@@ -130,9 +162,6 @@ export interface AuraPmsState {
     specialRequests?: string;
     paymentMethod?: string;
   }) => string;
-  addFolioCharge: (reservationId: string, charge: { description: string; amount: number; department?: FolioItem['department'] }) => void;
-  setRoomStatus: (roomId: string, status: RoomStatus) => void;
-  triggerRateParitySync: () => void;
   addToast: (title: string, message: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
   removeToast: (id: string) => void;
   resetToMockData: () => void;
@@ -141,7 +170,13 @@ export interface AuraPmsState {
 export const usePmsStore = create<AuraPmsState>()(
   persist(
     (set, get) => ({
-      currentUser: null,
+      currentUser: {
+        id: 'user-hotel-admin',
+        name: 'Vikramaditya Singh (General Manager)',
+        email: 'admin@udaivilas.com',
+        role: 'HOTEL_ADMIN',
+        hotelId: 'prop-udaipur',
+      },
       accounts: MOCK_ACCOUNTS,
       hotels: INITIAL_PROPERTIES,
       properties: INITIAL_PROPERTIES,
@@ -152,18 +187,32 @@ export const usePmsStore = create<AuraPmsState>()(
       channels: INITIAL_CHANNELS,
       promoCodes: INITIAL_PROMO_CODES,
       syncLogs: INITIAL_SYNC_LOGS,
+      posServices: INITIAL_SERVICES,
+      posOrders: INITIAL_POS_ORDERS,
+      nightAuditReports: INITIAL_NIGHT_AUDIT_LOGS,
       selectedDate: format(new Date(), 'yyyy-MM-dd'),
       stopSells: {},
       channelStopSells: {},
       toasts: [],
+      dbStatus: {
+        status: 'online',
+        engine: 'node:sqlite (Embedded SQLite 3)',
+        dbPath: 'data/hotel_pms.db',
+        sizeKb: 4,
+      },
 
       login: (email, pass) => {
+        const normalizedEmail = email.trim().toLowerCase();
         const acc = get().accounts.find(
-          (a) => a.email.toLowerCase() === email.trim().toLowerCase() && a.password === pass
+          (a) => a.email.toLowerCase() === normalizedEmail && a.password === pass
         );
 
         if (!acc) {
-          return { success: false, redirectUrl: '/login', message: 'Invalid credentials. Please use the Quick Demo login buttons.' };
+          return { 
+            success: false, 
+            redirectUrl: '/login', 
+            message: 'Invalid credentials. Please use the Quick Demo login buttons (or bookonedemo123@gmail.com / Pass@1234).' 
+          };
         }
 
         const user: AuthUser = {
@@ -197,21 +246,43 @@ export const usePmsStore = create<AuraPmsState>()(
         get().addToast('Session Ended', 'You have been securely signed out of the platform.', 'info');
       },
 
+      checkDatabaseStatus: async () => {
+        const status = await pmsApi.getStatus();
+        set({ dbStatus: status });
+      },
+
+      syncWithSqliteBackend: async () => {
+        const activeProp = get().activePropertyId;
+        const data = await pmsApi.getAll(activeProp);
+        if (data && data.properties) {
+          set({
+            hotels: data.properties,
+            properties: data.properties,
+            categories: data.categories || get().categories,
+            rooms: data.rooms || get().rooms,
+            reservations: data.reservations || get().reservations,
+            posServices: data.services || get().posServices,
+            channels: data.channels || get().channels,
+            syncLogs: data.syncLogs || get().syncLogs,
+          });
+          get().addToast('SQLite Synchronized', 'Real-time database state mirrored from local SQLite engine.', 'info');
+        }
+      },
+
+      reseedSqliteDatabase: async () => {
+        await pmsApi.resetDb();
+        await get().checkDatabaseStatus();
+        get().resetToMockData();
+      },
+
       updateHotelBranding: (hotelId, updates) => {
         set((state) => {
           const updatedHotels = state.hotels.map((h) =>
             h.id === hotelId ? { ...h, ...updates } : h
           );
-          return {
-            hotels: updatedHotels,
-            properties: updatedHotels,
-          };
+          return { hotels: updatedHotels, properties: updatedHotels };
         });
-        get().addToast(
-          'Brand Identity Synchronized',
-          'Updated hotel branding. Changes are immediately live across the Guest Booking Engine and PMS.',
-          'success'
-        );
+        get().addToast('Brand Identity Synchronized', 'Updated hotel branding cascade is active.', 'success');
       },
 
       createHotelTenant: (newHotelData) => {
@@ -220,7 +291,7 @@ export const usePmsStore = create<AuraPmsState>()(
           ...newHotelData,
           id,
           rating: 5.0,
-          roomsCount: 12,
+          roomsCount: 20,
         };
 
         set((state) => ({
@@ -228,12 +299,7 @@ export const usePmsStore = create<AuraPmsState>()(
           properties: [newHotel, ...state.properties],
         }));
 
-        get().addToast(
-          'Tenant Provisioned',
-          `Successfully onboarded ${newHotel.name} (${newHotel.code}) onto AURA SaaS.`,
-          'success'
-        );
-
+        get().addToast('Tenant Provisioned', `Successfully onboarded ${newHotel.name} (${newHotel.code}).`, 'success');
         return newHotel;
       },
 
@@ -247,66 +313,69 @@ export const usePmsStore = create<AuraPmsState>()(
           hotelId,
         };
 
-        set((state) => ({
-          accounts: [...state.accounts, newAccount],
-        }));
-
-        get().addToast(
-          'Account Provisioned',
-          `Hotel Admin access created for ${email}. Ready for instant sign-in.`,
-          'success'
-        );
+        set((state) => ({ accounts: [...state.accounts, newAccount] }));
+        get().addToast('Account Provisioned', `Hotel Admin access created for ${email}.`, 'success');
       },
 
       toggleHotelStatus: (hotelId) => {
         set((state) => {
           const updated = state.hotels.map((h) =>
-            h.id === hotelId
-              ? { ...h, status: (h.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE') as any }
-              : h
+            h.id === hotelId ? { ...h, status: (h.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE') as any } : h
           );
           return { hotels: updated, properties: updated };
         });
       },
 
-      setActiveProperty: (id) => set({ activePropertyId: id }),
-      
+      setActiveProperty: (id) => {
+        set({ activePropertyId: id });
+        get().syncWithSqliteBackend();
+      },
+
       setSelectedDate: (date) => set({ selectedDate: date }),
 
       addToast: (title, message, type = 'info') => {
         const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-        const now = format(new Date(), 'HH:mm:ss');
+        const nowTime = format(new Date(), 'HH:mm:ss');
         set((state) => ({
-          toasts: [{ id, title, message, type, timestamp: now }, ...state.toasts.slice(0, 4)],
+          toasts: [{ id, title, message, type, timestamp: nowTime }, ...state.toasts.slice(0, 4)],
         }));
       },
 
       removeToast: (id) => {
-        set((state) => ({
-          toasts: state.toasts.filter((t) => t.id !== id),
-        }));
+        set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
       },
 
       updateRoomStatus: (roomId, status) => {
         set((state) => ({
           rooms: state.rooms.map((r) => (r.id === roomId ? { ...r, status } : r)),
         }));
-        get().addToast('Room Status Updated', `Room status changed to ${status}`, 'info');
+        pmsApi.updateRoomStatus(roomId, status);
+        get().addToast('Room Status Updated', `Room ${roomId.replace('bse-', '')} status changed to ${status}`, 'info');
       },
 
       updateCleanliness: (roomId, cleanliness) => {
         set((state) => ({
           rooms: state.rooms.map((r) => (r.id === roomId ? { ...r, cleanliness } : r)),
         }));
-        get().addToast('Housekeeping Updated', `Room cleanliness set to ${cleanliness}`, 'info');
+        pmsApi.updateRoomStatus(roomId, undefined, cleanliness);
+        get().addToast('Housekeeping Updated', `Room ${roomId.replace('bse-', '')} cleanliness set to ${cleanliness}`, 'info');
+      },
+
+      updateRoomMaintenance: (roomId, note) => {
+        set((state) => ({
+          rooms: state.rooms.map((r) =>
+            r.id === roomId ? { ...r, status: note ? 'Maintenance' : 'Available', maintenanceNote: note } : r
+          ),
+        }));
+        pmsApi.updateRoomStatus(roomId, note ? 'Maintenance' : 'Available', undefined, note);
+        get().addToast('Maintenance Ticket', note ? `Room logged for maintenance: ${note}` : 'Room returned to service', 'warning');
       },
 
       createReservation: (data) => {
         const id = `res-${Date.now()}`;
-        const bookingCode = `AURA-${Math.floor(1000 + Math.random() * 9000)}`;
+        const bookingCode = `BK1-${Math.floor(1000 + Math.random() * 9000)}`;
         const gstRate = getRoomGstRate(data.roomRatePerNight);
         
-        // Initial room tariff folio item for Night 1
         const initialTaxCalc = calculateItemGst(data.roomRatePerNight, gstRate);
         const initialFolioItem: FolioItem = {
           id: `fol-${Date.now()}`,
@@ -323,6 +392,7 @@ export const usePmsStore = create<AuraPmsState>()(
 
         const newRes: Reservation = {
           id,
+          hotelId: get().activePropertyId,
           bookingCode,
           roomId: data.roomId,
           categoryId: data.categoryId,
@@ -347,18 +417,11 @@ export const usePmsStore = create<AuraPmsState>()(
         const syncLog: SyncLog = {
           id: `log-${Date.now()}`,
           timestamp: nowTime,
-          type: data.source === 'Direct Web' ? 'OUTBOUND' : 'INBOUND',
+          type: data.source === 'Direct Web' || data.source === 'Walk-In' ? 'OUTBOUND' : 'INBOUND',
           channel: data.source,
-          action: 'RESERVATION_CREATED',
-          details: `New booking ${bookingCode} created for ${data.guest.fullName} (${data.nights} nights).`,
-          rawPayloadSnippet: JSON.stringify({
-            bookingCode,
-            guest: data.guest.fullName,
-            room: data.roomId,
-            nights: data.nights,
-            rate: data.roomRatePerNight,
-            source: data.source,
-          }),
+          action: 'RESERVATION_CREATED_SQLITE',
+          details: `New booking ${bookingCode} created for ${data.guest.fullName} (${data.nights} nights). Stored in SQLite data/hotel_pms.db.`,
+          rawPayloadSnippet: JSON.stringify({ bookingCode, guest: data.guest.fullName, room: data.roomId }),
           status: 'SUCCESS',
         };
 
@@ -370,12 +433,13 @@ export const usePmsStore = create<AuraPmsState>()(
           syncLogs: [syncLog, ...state.syncLogs],
         }));
 
-        get().addToast(
-          'Reservation Confirmed',
-          `${bookingCode} created for ${data.guest.fullName} via ${data.source}`,
-          'success'
-        );
+        // Persist to local SQLite server asynchronously
+        pmsApi.createReservation({
+          ...newRes,
+          hotelId: get().activePropertyId,
+        });
 
+        get().addToast('Reservation Confirmed', `${bookingCode} recorded for ${data.guest.fullName} (${data.source})`, 'success');
         return newRes;
       },
 
@@ -387,11 +451,7 @@ export const usePmsStore = create<AuraPmsState>()(
         set((s) => ({
           reservations: s.reservations.map((r) =>
             r.id === reservationId
-              ? {
-                  ...r,
-                  status: 'Checked-In',
-                  notes: notes ? `${r.notes ? r.notes + ' | ' : ''}${notes}` : r.notes,
-                }
+              ? { ...r, status: 'Checked-In', notes: notes ? `${r.notes ? r.notes + ' | ' : ''}${notes}` : r.notes }
               : r
           ),
           rooms: s.rooms.map((room) =>
@@ -399,11 +459,8 @@ export const usePmsStore = create<AuraPmsState>()(
           ),
         }));
 
-        get().addToast(
-          'Guest Checked In',
-          `${res.guest.salutation} ${res.guest.fullName} has checked into Room ${res.roomId.replace('room-', '')}`,
-          'success'
-        );
+        pmsApi.checkIn(reservationId, notes);
+        get().addToast('Express Check-In Completed', `${res.guest.salutation} ${res.guest.fullName} checked into Room ${res.roomId.replace('bse-', '')}`, 'success');
       },
 
       checkOutGuest: (reservationId, paymentMethod, amountPaid, notes) => {
@@ -417,17 +474,13 @@ export const usePmsStore = create<AuraPmsState>()(
           method: paymentMethod,
           referenceNumber: `REC-${Math.floor(100000 + Math.random() * 900000)}`,
           amount: amountPaid,
-          notes: notes || 'Settlement at checkout',
+          notes: notes || 'Checkout settlement',
         };
 
         set((s) => ({
           reservations: s.reservations.map((r) =>
             r.id === reservationId
-              ? {
-                  ...r,
-                  status: 'Checked-Out',
-                  payments: [...r.payments, newPayment],
-                }
+              ? { ...r, status: 'Checked-Out', payments: [...r.payments, newPayment] }
               : r
           ),
           rooms: s.rooms.map((room) =>
@@ -437,11 +490,8 @@ export const usePmsStore = create<AuraPmsState>()(
           ),
         }));
 
-        get().addToast(
-          'Checkout Complete',
-          `${res.guest.fullName} checked out. Room ${res.roomId.replace('room-', '')} marked for Cleaning.`,
-          'info'
-        );
+        pmsApi.checkOut(reservationId, paymentMethod, amountPaid, notes);
+        get().addToast('Settlement & Check-Out Complete', `${res.guest.fullName} checked out. Room ${res.roomId.replace('bse-', '')} marked for Cleaning.`, 'info');
       },
 
       addFolioItem: (reservationId, item) => {
@@ -449,7 +499,7 @@ export const usePmsStore = create<AuraPmsState>()(
         const res = state.reservations.find((r) => r.id === reservationId);
         if (!res) return;
 
-        const gstRate = item.gstRate !== undefined ? item.gstRate : 0.18;
+        const gstRate = item.gstRate !== undefined ? item.gstRate : 0.05;
         const taxCalc = calculateItemGst(item.amount, gstRate);
 
         const newFolioItem: FolioItem = {
@@ -471,11 +521,8 @@ export const usePmsStore = create<AuraPmsState>()(
           ),
         }));
 
-        get().addToast(
-          'Charge Posted',
-          `Posted ₹${item.amount.toLocaleString('en-IN')} (${item.department}) to Folio #${res.bookingCode}`,
-          'success'
-        );
+        pmsApi.postFolio(reservationId, item);
+        get().addToast('Charge Posted', `Posted ₹${item.amount.toLocaleString('en-IN')} (${item.department}) to Folio #${res.bookingCode}`, 'success');
       },
 
       addPayment: (reservationId, payment) => {
@@ -498,11 +545,7 @@ export const usePmsStore = create<AuraPmsState>()(
           ),
         }));
 
-        get().addToast(
-          'Payment Recorded',
-          `Received ₹${payment.amount.toLocaleString('en-IN')} via ${payment.method}`,
-          'success'
-        );
+        get().addToast('Payment Recorded', `Received ₹${payment.amount.toLocaleString('en-IN')} via ${payment.method}`, 'success');
       },
 
       applyPromoCodeToReservation: (reservationId, codeStr) => {
@@ -515,14 +558,6 @@ export const usePmsStore = create<AuraPmsState>()(
           return { success: false, message: 'Invalid or expired promotional code', discountAmount: 0 };
         }
 
-        if (promo.minimumNights && res.nights < promo.minimumNights) {
-          return {
-            success: false,
-            message: `Promo code ${promo.code} requires a minimum stay of ${promo.minimumNights} nights.`,
-            discountAmount: 0,
-          };
-        }
-
         let discount = 0;
         const totalRoomTariff = res.roomRatePerNight * res.nights;
         if (promo.discountType === 'PERCENTAGE') {
@@ -533,22 +568,11 @@ export const usePmsStore = create<AuraPmsState>()(
 
         set((s) => ({
           reservations: s.reservations.map((r) =>
-            r.id === reservationId
-              ? {
-                  ...r,
-                  discountAmount: discount,
-                  discountCode: promo.code,
-                }
-              : r
+            r.id === reservationId ? { ...r, discountAmount: discount, discountCode: promo.code } : r
           ),
         }));
 
-        get().addToast(
-          'Promotion Applied',
-          `Applied code ${promo.code}: Saved ₹${discount.toLocaleString('en-IN')}`,
-          'success'
-        );
-
+        get().addToast('Promotion Applied', `Applied code ${promo.code}: Saved ₹${discount.toLocaleString('en-IN')}`, 'success');
         return { success: true, message: `Applied ${promo.code} (-₹${discount.toLocaleString('en-IN')})`, discountAmount: discount };
       },
 
@@ -556,39 +580,115 @@ export const usePmsStore = create<AuraPmsState>()(
         if (channelSlug) {
           const key = `${channelSlug}_${categoryId}`;
           set((s) => ({
-            channelStopSells: {
-              ...s.channelStopSells,
-              [key]: !s.channelStopSells[key],
-            },
+            channelStopSells: { ...s.channelStopSells, [key]: !s.channelStopSells[key] },
           }));
           const isStop = !get().channelStopSells[key];
-          get().addToast(
-            'Channel Stop-Sell Toggled',
-            `${channelSlug.toUpperCase()} Stop-Sell: ${isStop ? 'ACTIVE' : 'RELEASED'}`,
-            isStop ? 'warning' : 'info'
-          );
+          get().addToast('Channel Stop-Sell Toggled', `${channelSlug.toUpperCase()} Stop-Sell: ${isStop ? 'ACTIVE' : 'RELEASED'}`, isStop ? 'warning' : 'info');
         } else {
           set((s) => ({
-            stopSells: {
-              ...s.stopSells,
-              [categoryId]: !s.stopSells[categoryId],
-            },
+            stopSells: { ...s.stopSells, [categoryId]: !s.stopSells[categoryId] },
           }));
           const isStop = !get().stopSells[categoryId];
-          get().addToast(
-            'Master Stop-Sell Toggled',
-            `Category Stop-Sell: ${isStop ? 'CLOSED (STOP SELL)' : 'OPEN FOR SALE'}`,
-            isStop ? 'warning' : 'info'
-          );
+          get().addToast('Master Stop-Sell Toggled', `Category Stop-Sell: ${isStop ? 'CLOSED (STOP SELL)' : 'OPEN FOR SALE'}`, isStop ? 'warning' : 'info');
         }
+      },
+
+      createPosOrder: (orderData) => {
+        const orderId = `pos-${Date.now()}`;
+        const orderNumber = `KOT-${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const newOrder: PosOrder = {
+          id: orderId,
+          hotelId: get().activePropertyId,
+          orderNumber,
+          counterName: orderData.counterName,
+          roomId: orderData.roomId,
+          reservationId: orderData.reservationId,
+          guestName: orderData.guestName,
+          items: orderData.items,
+          subtotal: orderData.subtotal,
+          taxAmount: orderData.taxAmount,
+          totalAmount: orderData.totalAmount,
+          paymentStatus: orderData.paymentStatus,
+          paymentMethod: orderData.paymentMethod,
+          createdAt: new Date().toISOString(),
+        };
+
+        set((s) => ({ posOrders: [newOrder, ...s.posOrders] }));
+
+        // If billed to room, post charge to reservation folio
+        if (orderData.paymentStatus === 'BILLED_TO_ROOM' && orderData.reservationId) {
+          get().addFolioItem(orderData.reservationId, {
+            department: 'Fine Dining',
+            description: `POS Order #${orderNumber} (${orderData.counterName})`,
+            amount: orderData.subtotal,
+            gstRate: 0.05,
+            postedBy: 'POS Terminal',
+          });
+        }
+
+        pmsApi.createPosOrder(newOrder);
+        get().addToast('POS Order Processed', `Order #${orderNumber} created for ${orderData.guestName} (₹${orderData.totalAmount.toLocaleString('en-IN')})`, 'success');
+        return newOrder;
+      },
+
+      runNightAudit: async (runBy = 'System Auditor') => {
+        const activeProp = get().activePropertyId;
+        const auditDate = get().selectedDate;
+
+        const inHouse = get().reservations.filter((r) => r.hotelId === activeProp && r.status === 'Checked-In');
+
+        // Post night tariff for in-house guests
+        for (const res of inHouse) {
+          const gstRate = getRoomGstRate(res.roomRatePerNight);
+          get().addFolioItem(res.id, {
+            department: 'Room Tariff',
+            description: `Nightly Room Tariff (${auditDate})`,
+            amount: res.roomRatePerNight,
+            gstRate,
+            postedBy: 'Night Audit System',
+          });
+        }
+
+        const totalRooms = get().rooms.filter((r) => r.hotelId === activeProp).length || 20;
+        const occupiedCount = inHouse.length;
+        const occupancyRate = totalRooms > 0 ? (occupiedCount / totalRooms) * 100 : 0;
+        const roomRev = inHouse.reduce((acc, r) => acc + r.roomRatePerNight, 0);
+        const taxCollected = roomRev * 0.12;
+
+        const report: NightAuditReport = {
+          id: `audit-${Date.now()}`,
+          hotelId: activeProp,
+          auditDate,
+          runBy,
+          occupiedRooms: occupiedCount,
+          totalRooms,
+          occupancyRate,
+          roomRevenue: roomRev,
+          posRevenue: 0,
+          totalRevenue: roomRev,
+          taxCollected,
+          createdAt: new Date().toISOString(),
+        };
+
+        // Advance calendar date by 1 day
+        const nextDate = format(addDays(new Date(auditDate), 1), 'yyyy-MM-dd');
+        set((s) => ({
+          nightAuditReports: [report, ...s.nightAuditReports],
+          selectedDate: nextDate,
+        }));
+
+        pmsApi.runNightAudit({ hotelId: activeProp, auditDate, runBy });
+        get().addToast('Night Audit Completed', `Business day closed for ${auditDate}. Date advanced to ${nextDate}.`, 'success');
+
+        return { success: true, message: 'Night audit completed successfully', report };
       },
 
       simulateOtaInbound: (channel) => {
         const state = get();
-        // Pick an available room
         const availableRoom = state.rooms.find((r) => r.status === 'Available');
         if (!availableRoom) {
-          get().addToast('OTA Sync Alert', `No rooms currently available to accept ${channel} booking!`, 'warning');
+          get().addToast('OTA Sync Alert', `No rooms available to accept ${channel} booking!`, 'warning');
           return null;
         }
 
@@ -600,8 +700,8 @@ export const usePmsStore = create<AuraPmsState>()(
           { name: 'Nisha & Sameer Khurana', email: 'nisha@khuranagroup.com', phone: '+91 98100 44321' },
         ];
         const randomGuest = guests[Math.floor(Math.random() * guests.length)];
-        const checkIn = format(new Date(), 'yyyy-MM-dd');
-        const checkOut = format(addDays(new Date(), 3), 'yyyy-MM-dd');
+        const checkIn = state.selectedDate;
+        const checkOut = format(addDays(new Date(state.selectedDate), 3), 'yyyy-MM-dd');
 
         const newRes = get().createReservation({
           roomId: availableRoom.id,
@@ -616,6 +716,8 @@ export const usePmsStore = create<AuraPmsState>()(
             idType: 'Aadhaar Card',
             idNumber: '•••• •••• 8844',
             vipStatus: true,
+            totalSpend: category.basePrice * 3,
+            visitCount: 1,
           },
           checkInDate: checkIn,
           checkOutDate: checkOut,
@@ -627,56 +729,104 @@ export const usePmsStore = create<AuraPmsState>()(
           notes: `Simulated inbound live push via ${channel} Channel Gateway API v3.2`,
         });
 
-        // Add a detailed sync log
         const syncLog: SyncLog = {
           id: `log-${Date.now()}`,
           timestamp: format(new Date(), 'HH:mm:ss'),
           type: 'INBOUND',
           channel,
           action: 'OTA_WEBHOOK_PUSH',
-          details: `Channel Manager received instant XML/JSON booking push from ${channel} for ${category.name} (${availableRoom.roomNumber}).`,
-          rawPayloadSnippet: `[SYNC SUCCESS] Payload acknowledged. Inventory deducted on MMT, Booking.com, Goibibo, Agoda (Rate: ₹${category.basePrice.toLocaleString('en-IN')}, StopSell: false)`,
+          details: `Channel Manager received instant XML/JSON booking push from ${channel} for ${category.name} (${availableRoom.roomNumber}). Saved to SQLite database.`,
+          rawPayloadSnippet: `[SYNC SUCCESS] Payload acknowledged. Inventory deducted across OTAs (Rate: ₹${category.basePrice.toLocaleString('en-IN')})`,
+          status: 'SUCCESS',
+        };
+
+        set((s) => ({ syncLogs: [syncLog, ...s.syncLogs] }));
+        return newRes;
+      },
+
+      simulateDirectBooking: () => {
+        const state = get();
+        const availableRoom = state.rooms.find((r) => r.status === 'Available');
+        if (!availableRoom) {
+          get().addToast('Direct Engine Alert', 'No rooms available for direct booking!', 'warning');
+          return null;
+        }
+
+        const category = state.categories.find((c) => c.id === availableRoom.categoryId) || state.categories[0];
+        const checkIn = state.selectedDate;
+        const checkOut = format(addDays(new Date(state.selectedDate), 3), 'yyyy-MM-dd');
+
+        const newRes = get().createReservation({
+          roomId: availableRoom.id,
+          categoryId: category.id,
+          guest: {
+            id: `g-${Date.now()}`,
+            fullName: 'Rajiv & Ananya Singhania',
+            salutation: 'Mr.',
+            email: 'rajiv.singhania@corp.in',
+            phone: '+91 98200 11984',
+            country: 'India',
+            idType: 'Aadhaar Card',
+            idNumber: '•••• •••• 9921',
+            vipStatus: true,
+            totalSpend: category.basePrice * 3,
+            visitCount: 2,
+          },
+          checkInDate: checkIn,
+          checkOutDate: checkOut,
+          nights: 3,
+          adults: 2,
+          children: 0,
+          source: 'Direct Web',
+          roomRatePerNight: category.basePrice,
+          discountAmount: Math.round(category.basePrice * 0.1),
+          discountCode: 'BOOKONEDEMO',
+          notes: 'Booked directly via BookOne Guest Engine (0% commission).',
+        });
+
+        const syncLog: SyncLog = {
+          id: `log-${Date.now()}`,
+          timestamp: format(new Date(), 'HH:mm:ss'),
+          type: 'OUTBOUND',
+          channel: 'Direct Web',
+          action: 'BROADCAST_INVENTORY_DEDUCTION',
+          details: `Direct booking ${newRes.bookingCode} completed. Dispatched inventory -1 delta to all connected OTA channels.`,
+          rawPayloadSnippet: `[BROADCAST SUCCESS] Dispatched OTA Inventory Delta: Category ${category.code} inventory updated on MMT, BDC, GOI, AGD.`,
+          status: 'SUCCESS',
+        };
+
+        set((s) => ({ syncLogs: [syncLog, ...s.syncLogs] }));
+        return newRes;
+      },
+
+      triggerRateParitySync: () => {
+        const nowTime = format(new Date(), 'HH:mm:ss');
+        const syncLog: SyncLog = {
+          id: `log-${Date.now()}`,
+          timestamp: nowTime,
+          type: 'SYSTEM',
+          channel: 'CENTRAL_GATEWAY',
+          action: 'FORCE_FULL_INVENTORY_RATE_SYNC',
+          details: 'Full bi-directional audit completed across MakeMyTrip, Booking.com, Goibibo, and Agoda. All rates in 100% parity.',
+          rawPayloadSnippet: `[RATE PARITY OK] 4 Categories Synced | 20 Units Distributed | Rates Validated.`,
           status: 'SUCCESS',
         };
 
         set((s) => ({
           syncLogs: [syncLog, ...s.syncLogs],
+          channels: s.channels.map((c) => ({ ...c, lastSyncTime: 'Just now', pendingSyncCount: 0 })),
         }));
 
-        return newRes;
-      },
-
-      simulateOtaBooking: (source) => {
-        const channelMap: Record<string, 'MakeMyTrip' | 'Booking.com' | 'Goibibo'> = {
-          MAKEMYTRIP: 'MakeMyTrip',
-          GOIBIBO: 'Goibibo',
-          BOOKING_COM: 'Booking.com',
-        };
-        const ch = channelMap[source] || 'MakeMyTrip';
-        get().simulateOtaInbound(ch);
-      },
-
-      setRoomStatus: (roomId, status) => {
-        get().updateRoomStatus(roomId, status);
-      },
-
-      addFolioCharge: (reservationId, charge) => {
-        get().addFolioItem(reservationId, {
-          department: charge.department || 'Fine Dining',
-          description: charge.description,
-          amount: charge.amount,
-        });
+        get().addToast('OTA Parity Sync', 'Bi-directional rate & inventory synchronization broadcasted to all channels.', 'success');
       },
 
       bookFromGuestPortal: (data) => {
         const state = get();
         const category = state.categories.find((c) => c.id === data.categoryId) || state.categories[0];
         
-        // Find first available room in category or any available
         const availRoom = 
           state.rooms.find((r) => r.categoryId === category.id && r.status === 'Available') ||
           state.rooms.find((r) => r.status === 'Available') ||
-          state.rooms.find((r) => r.categoryId === category.id) ||
           state.rooms[0];
 
         let discount = 0;
@@ -716,10 +866,9 @@ export const usePmsStore = create<AuraPmsState>()(
           notes: data.specialRequests,
         });
 
-        // Record upfront payment if chosen
         if (data.paymentMethod && data.paymentMethod !== 'PAY_AT_HOTEL') {
           const totalAfterDiscount = Math.max(0, category.basePrice * data.nights - discount);
-          const tax = Math.round(totalAfterDiscount * 0.18);
+          const tax = Math.round(totalAfterDiscount * 0.12);
           get().addPayment(newRes.id, {
             method: data.paymentMethod === 'UPI' ? 'UPI' : 'Credit Card',
             amount: totalAfterDiscount + tax,
@@ -730,96 +879,18 @@ export const usePmsStore = create<AuraPmsState>()(
         return newRes.bookingCode;
       },
 
-      simulateDirectBooking: () => {
-        const state = get();
-        const availableRoom = state.rooms.find((r) => r.status === 'Available');
-        if (!availableRoom) {
-          get().addToast('Direct Engine Alert', 'No rooms available for direct guest booking!', 'warning');
-          return null;
-        }
-
-        const category = state.categories.find((c) => c.id === availableRoom.categoryId) || state.categories[0];
-        const checkIn = format(new Date(), 'yyyy-MM-dd');
-        const checkOut = format(addDays(new Date(), 4), 'yyyy-MM-dd');
-
-        const newRes = get().createReservation({
-          roomId: availableRoom.id,
-          categoryId: category.id,
-          guest: {
-            id: `g-${Date.now()}`,
-            fullName: 'Countess Beatrix Von Habsburg',
-            salutation: 'Lady',
-            email: 'beatrix@habsburg-estate.at',
-            phone: '+43 1 512 8844',
-            country: 'Austria',
-            idType: 'Passport',
-            idNumber: 'AUT-P998124',
-            vipStatus: true,
-            specialRequests: 'Chilled Krug Clos d\'Ambonnay upon arrival.',
-          },
-          checkInDate: checkIn,
-          checkOutDate: checkOut,
-          nights: 4,
-          adults: 2,
-          children: 0,
-          source: 'Direct Web',
-          roomRatePerNight: category.basePrice,
-          discountAmount: Math.round(category.basePrice * 0.1),
-          discountCode: 'ROYAL10',
-          notes: 'Booked directly via AURA Sovereign Guest Engine (0% commission).',
-        });
-
-        const syncLog: SyncLog = {
-          id: `log-${Date.now()}`,
-          timestamp: format(new Date(), 'HH:mm:ss'),
-          type: 'OUTBOUND',
-          channel: 'Direct Web',
-          action: 'BROADCAST_INVENTORY_DEDUCTION',
-          details: `Direct booking ${newRes.bookingCode} completed. Dispatched inventory -1 delta to all connected OTA channels.`,
-          rawPayloadSnippet: `[BROADCAST SUCCESS] Dispatched OTA Inventory Delta: Category ${category.code} inventory updated on MMT, BDC, GOI, AGD.`,
-          status: 'SUCCESS',
-        };
-
-        set((s) => ({
-          syncLogs: [syncLog, ...s.syncLogs],
-        }));
-
-        return newRes;
-      },
-
-      triggerRateParitySync: () => {
-        const nowTime = format(new Date(), 'HH:mm:ss');
-        const syncLog: SyncLog = {
-          id: `log-${Date.now()}`,
-          timestamp: nowTime,
-          type: 'SYSTEM',
-          channel: 'CENTRAL_GATEWAY',
-          action: 'FORCE_FULL_INVENTORY_RATE_SYNC',
-          details: 'Full bi-directional audit completed across MakeMyTrip, Booking.com, Goibibo, and Agoda. All rates in 100% parity.',
-          rawPayloadSnippet: `[RATE PARITY OK] 5 Categories Synced | 17 Units Distributed | Rates Validated: SGV ₹14,500, RHS ₹28,000, LVP ₹38,500, KPV ₹56,000, MSV ₹95,000.`,
-          status: 'SUCCESS',
-        };
-
-        set((s) => ({
-          syncLogs: [syncLog, ...s.syncLogs],
-          channels: s.channels.map((c) => ({
-            ...c,
-            lastSyncTime: 'Just now',
-            pendingSyncCount: 0,
-          })),
-        }));
-
-        get().addToast('OTA Parity Sync', 'Bi-directional rate & inventory synchronization broadcasted to all channels.', 'success');
-      },
-
       resetToMockData: () => {
         set({
           properties: INITIAL_PROPERTIES,
+          hotels: INITIAL_PROPERTIES,
           activePropertyId: 'prop-udaipur',
           categories: INITIAL_CATEGORIES,
           rooms: INITIAL_ROOMS,
           reservations: INITIAL_RESERVATIONS,
           channels: INITIAL_CHANNELS,
+          posServices: INITIAL_SERVICES,
+          posOrders: INITIAL_POS_ORDERS,
+          nightAuditReports: INITIAL_NIGHT_AUDIT_LOGS,
           promoCodes: INITIAL_PROMO_CODES,
           syncLogs: INITIAL_SYNC_LOGS,
           selectedDate: format(new Date(), 'yyyy-MM-dd'),
@@ -827,12 +898,11 @@ export const usePmsStore = create<AuraPmsState>()(
           channelStopSells: {},
           toasts: [],
         });
-        get().addToast('System Reset', 'All PMS data restored to pristine luxury seed state.', 'info');
+        get().addToast('System Reset', 'All PMS data restored to pristine state.', 'info');
       },
     }),
     {
-      name: 'aura-luxury-pms-store',
+      name: 'aura-luxury-pms-store-v3',
     }
   )
 );
-

@@ -1,4 +1,4 @@
-export type UserRole = 'SUPER_ADMIN' | 'HOTEL_ADMIN' | 'GUEST';
+export type UserRole = 'SUPER_ADMIN' | 'HOTEL_ADMIN' | 'FRONT_DESK' | 'HOUSEKEEPING' | 'GUEST';
 
 export interface AuthUser {
   id: string;
@@ -42,7 +42,7 @@ export type RoomStatus = 'Available' | 'Occupied' | 'Reserved' | 'Cleaning' | 'M
 
 export type CleanlinessStatus = 'Clean' | 'Dirty' | 'Inspected' | 'In Progress';
 
-export type BookingSource = 'MakeMyTrip' | 'Booking.com' | 'Goibibo' | 'Agoda' | 'Direct Web' | 'Walk-In' | 'Luxury Escapes';
+export type BookingSource = 'MakeMyTrip' | 'Booking.com' | 'Goibibo' | 'Agoda' | 'Expedia' | 'Airbnb' | 'Direct Web' | 'Walk-In' | 'Corporate' | 'Luxury Escapes';
 
 export type ReservationStatus = 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled';
 
@@ -62,14 +62,17 @@ export interface RoomCategory {
   tier: string;
   description: string;
   basePrice: number;
-  extraBedCharge: number;
+  rackRate?: number;
+  minRate?: number;
+  maxRate?: number;
+  extraBedCharge?: number;
   maxAdults: number;
   maxChildren: number;
   sqFt: number;
-  view: string;
+  view?: string;
   bedType: string;
   heroImage: string;
-  gallery: string[];
+  gallery?: string[];
   amenities: string[];
   totalRooms: number;
 }
@@ -93,12 +96,14 @@ export interface GuestProfile {
   email: string;
   phone: string;
   country: string;
-  idType: 'Aadhaar Card' | 'Passport' | 'Driving License';
+  idType: 'Aadhaar Card' | 'Passport' | 'Driving License' | 'Voter ID';
   idNumber: string;
   idDocumentPreview?: string;
   vipStatus: boolean;
   specialRequests?: string;
   dietaryPreferences?: string;
+  totalSpend?: number;
+  visitCount?: number;
 }
 
 export interface FolioItem {
@@ -150,12 +155,13 @@ export interface Reservation {
 
 export interface ChannelConnection {
   id: string;
+  hotelId?: string;
   name: BookingSource;
   slug: string;
   status: 'Connected' | 'Syncing' | 'Error' | 'Paused';
   lastSyncTime: string;
   pendingSyncCount: number;
-  activeRatePlan: string;
+  activeRatePlan?: string;
   commissionRate: number;
   logoUrl?: string;
 }
@@ -178,4 +184,80 @@ export interface PromoCode {
   value: number;
   minimumNights?: number;
   validUntil: string;
+}
+
+// Point of Sale (POS) & Property Services
+export interface PosService {
+  id: string;
+  hotelId?: string;
+  name: string;
+  category: 'Food' | 'Beverages' | 'Activity' | 'Transport' | 'Extra Bed' | 'Express Checkout' | 'Spa' | 'Miscellaneous';
+  description: string;
+  price: number;
+  taxRate: number; // e.g. 0.05 for F&B, 0.18 for luxury services
+  imageUrl?: string;
+  active: boolean;
+}
+
+export interface PosOrderItem {
+  serviceId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  taxAmount: number;
+  totalAmount: number;
+}
+
+export interface PosOrder {
+  id: string;
+  hotelId: string;
+  orderNumber: string;
+  counterName: string;
+  roomId?: string;
+  reservationId?: string;
+  guestName: string;
+  items: PosOrderItem[];
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  paymentStatus: 'PAID' | 'BILLED_TO_ROOM';
+  paymentMethod?: PaymentMethod;
+  createdAt: string;
+}
+
+// Night Audit & Financial Operations
+export interface NightAuditReport {
+  id: string;
+  hotelId: string;
+  auditDate: string;
+  runBy: string;
+  occupiedRooms: number;
+  totalRooms: number;
+  occupancyRate: number;
+  roomRevenue: number;
+  posRevenue: number;
+  totalRevenue: number;
+  taxCollected: number;
+  createdAt: string;
+}
+
+// Local SQLite Database State
+export interface DatabaseStatus {
+  status: 'online' | 'offline' | 'connecting';
+  engine: string;
+  dbPath: string;
+  sizeKb: number;
+  lastModified?: string;
+  tableCounts?: {
+    properties: number;
+    room_categories: number;
+    rooms: number;
+    reservations: number;
+    folio_items: number;
+    folio_payments: number;
+    pos_services: number;
+    pos_orders: number;
+    sync_logs: number;
+  };
 }

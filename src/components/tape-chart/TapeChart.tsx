@@ -37,9 +37,10 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
   } = usePmsStore();
 
   const [calendarStartDate, setCalendarStartDate] = useState<Date>(() => subDays(new Date(), 2));
-  const [totalDays] = useState<number>(21);
+  const [totalDays, setTotalDays] = useState<number>(14);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('ALL');
+  const [selectedFloorFilter, setSelectedFloorFilter] = useState('ALL');
   
   // Quick Reservation Drawer state
   const [quickBookingSlot, setQuickBookingSlot] = useState<{
@@ -62,9 +63,12 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
       if (selectedCategoryFilter !== 'ALL' && room.categoryId !== selectedCategoryFilter) {
         return false;
       }
+      if (selectedFloorFilter !== 'ALL' && room.floor.toString() !== selectedFloorFilter) {
+        return false;
+      }
       return true;
     });
-  }, [rooms, selectedCategoryFilter]);
+  }, [rooms, selectedCategoryFilter, selectedFloorFilter]);
 
   // Map category lookup
   const categoryMap = useMemo(() => {
@@ -92,7 +96,7 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
     });
   };
 
-  // Status badge styling helper (Light Luxury Edition)
+  // Status badge styling helper
   const getStatusBadge = (status: RoomStatus) => {
     switch (status) {
       case 'Available':
@@ -108,7 +112,7 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
     }
   };
 
-  // Reservation block style (Light Luxury Edition)
+  // Reservation block style
   const getReservationBlockStyle = (res: Reservation) => {
     if (res.status === 'Checked-In') {
       return {
@@ -132,116 +136,143 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#FAFAF8]">
-      {/* Tape Chart Top Controls Bar (Light Luxury) */}
-      <div className="p-4 border-b border-stone-200 bg-white flex flex-wrap items-center justify-between gap-3 shadow-soft-luxury">
+      {/* Tape Chart Top Controls Bar */}
+      <div className="p-3 sm:p-4 border-b border-stone-200 bg-white flex flex-wrap items-center justify-between gap-3 shadow-sm">
         {/* Left: Timeline Navigation & Date Range */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center bg-stone-100 border border-stone-200 rounded-xl p-1">
             <button
               onClick={() => shiftCalendar(-7)}
               title="Previous 7 Days"
-              className="p-1.5 hover:bg-white rounded-lg text-stone-600 hover:text-stone-900 transition-colors"
+              className="p-1 hover:bg-white rounded-lg text-stone-600 hover:text-stone-900 transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={resetToToday}
-              className="px-3 py-1 text-xs font-serif font-bold text-[#936F25] hover:bg-white rounded-lg transition-colors"
+              className="px-2.5 py-1 text-xs font-serif font-bold text-[#936F25] hover:bg-white rounded-lg transition-colors"
             >
               Today
             </button>
             <button
               onClick={() => shiftCalendar(7)}
               title="Next 7 Days"
-              className="p-1.5 hover:bg-white rounded-lg text-stone-600 hover:text-stone-900 transition-colors"
+              className="p-1 hover:bg-white rounded-lg text-stone-600 hover:text-stone-900 transition-colors"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="hidden sm:flex items-center gap-2 text-xs font-mono text-stone-600">
-            <CalendarIcon className="w-4 h-4 text-[#B48C36]" />
-            <span>
-              {timelineDates[0] && formatDateEditorial(timelineDates[0].dateStr)} –{' '}
-              {timelineDates[timelineDates.length - 1] &&
-                formatDateEditorial(timelineDates[timelineDates.length - 1].dateStr)}
-            </span>
+          {/* Zoom view selectors: 7d, 14d, 21d, 30d */}
+          <div className="flex items-center bg-stone-100 border border-stone-200 rounded-xl p-0.5 text-xs font-mono">
+            {[7, 14, 21, 30].map((days) => (
+              <button
+                key={days}
+                onClick={() => setTotalDays(days)}
+                className={`px-2 py-1 rounded-lg font-bold transition-all ${
+                  totalDays === days
+                    ? 'bg-white text-stone-900 shadow-xs'
+                    : 'text-stone-500 hover:text-stone-900'
+                }`}
+              >
+                {days}d
+              </button>
+            ))}
+          </div>
+
+          <div className="hidden md:flex items-center gap-1.5 text-xs text-stone-600 font-mono">
+            <span>{formatDateEditorial(timelineStartStr)}</span>
+            <span className="text-stone-400">→</span>
+            <span>{formatDateEditorial(timelineEndStr)}</span>
           </div>
         </div>
 
-        {/* Center: Search input */}
-        <div className="relative min-w-[260px]">
-          <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Search guest name or booking code..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-900 placeholder:text-stone-400 focus:border-[#B48C36] outline-none"
-          />
-        </div>
+        {/* Right: Filters & Search */}
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 sm:flex-initial justify-end">
+          {/* Floor filter */}
+          <select
+            value={selectedFloorFilter}
+            onChange={(e) => setSelectedFloorFilter(e.target.value)}
+            className="text-xs bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 focus:outline-none focus:border-[#B48C36]"
+          >
+            <option value="ALL">All Floors</option>
+            <option value="1">Floor 1</option>
+            <option value="2">Floor 2</option>
+            <option value="3">Floor 3</option>
+            <option value="4">Floor 4</option>
+          </select>
 
-        {/* Right: Category filter */}
-        <div className="flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-stone-400" />
+          {/* Category Filter */}
           <select
             value={selectedCategoryFilter}
             onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-            className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-xs text-stone-900 focus:border-[#B48C36] outline-none"
+            className="text-xs bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 focus:outline-none focus:border-[#B48C36] max-w-[140px] truncate"
           >
-            <option value="ALL">All Categories ({rooms.length} Suites)</option>
+            <option value="ALL">All Categories</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>
-                {cat.name} ({cat.tier})
+                {cat.name}
               </option>
             ))}
           </select>
+
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              placeholder="Guest or Code..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 pr-3 py-1.5 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-800 focus:outline-none focus:border-[#B48C36] w-32 sm:w-44 transition-all"
+            />
+          </div>
         </div>
       </div>
 
       {/* Status Badges Legend */}
-      <div className="px-6 py-2.5 border-b border-stone-200 bg-[#FAF6EC]/50 flex flex-wrap items-center justify-between text-xs font-mono gap-2">
-        <div className="flex items-center gap-4">
-          <span className="text-stone-500 uppercase tracking-wider text-[10px] font-bold">Suite States:</span>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-            <span className="text-stone-700">Available</span>
+      <div className="px-4 sm:px-6 py-2 border-b border-stone-200 bg-[#FAF6EC]/50 flex flex-wrap items-center justify-between text-xs font-mono gap-2">
+        <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto pb-0.5 scrollbar-none">
+          <span className="text-stone-500 uppercase tracking-wider text-[10px] font-bold">States:</span>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span className="text-stone-700 text-[11px]">Available</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
-            <span className="text-stone-700">Occupied (In-House)</span>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+            <span className="text-stone-700 text-[11px]">Occupied</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
-            <span className="text-stone-700">Reserved (Confirmed)</span>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+            <span className="text-stone-700 text-[11px]">Reserved</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-            <span className="text-stone-700">Cleaning (Turn-Down)</span>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+            <span className="text-stone-700 text-[11px]">Cleaning</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-stone-500"></span>
-            <span className="text-stone-700">Maintenance</span>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-stone-500"></span>
+            <span className="text-stone-700 text-[11px]">Maintenance</span>
           </div>
         </div>
 
-        <div className="text-[11px] text-[#936F25] font-serif">
-          💡 Click vacant slot to book • Click reservation for Live Guest Folio
+        <div className="text-[11px] text-[#936F25] font-serif hidden md:block">
+          💡 Click empty slot to book • Click reservation for Guest Folio & Invoicing
         </div>
       </div>
 
       {/* Main Tape Chart Scroll Area */}
-      <div className="flex-1 overflow-auto relative">
+      <div className="flex-1 overflow-auto relative scrollbar-thin">
         <div className="inline-block min-w-full">
           {/* Header Row: Dates */}
           <div className="flex sticky top-0 z-30 bg-white border-b border-stone-200 shadow-sm">
             {/* Left Frozen Column: Room Info Header */}
-            <div className="w-64 flex-shrink-0 sticky left-0 z-40 bg-white border-r border-stone-200 px-4 py-3 flex items-center justify-between">
-              <span className="text-xs font-serif font-bold text-stone-900 tracking-wider uppercase">
-                SUITES & RESIDENCES
+            <div className="w-48 sm:w-60 flex-shrink-0 sticky left-0 z-40 bg-white border-r border-stone-200 px-3 sm:px-4 py-2.5 flex items-center justify-between shadow-xs">
+              <span className="text-[11px] font-serif font-bold text-stone-900 tracking-wider uppercase">
+                ROOMS & SUITES
               </span>
               <span className="text-[10px] font-mono text-[#936F25] bg-[#FAF6EC] px-2 py-0.5 rounded border border-[#B48C36]/30 font-bold">
-                {filteredRooms.length} UNITS
+                {filteredRooms.length}
               </span>
             </div>
 
@@ -250,7 +281,7 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
               {timelineDates.map((d) => (
                 <div
                   key={d.dateStr}
-                  className={`w-28 flex-shrink-0 border-r border-stone-200 px-1 py-2 text-center transition-colors ${
+                  className={`w-24 sm:w-28 flex-shrink-0 border-r border-stone-200 px-1 py-1.5 text-center transition-colors ${
                     d.isToday
                       ? 'bg-[#FAF6EC] border-b-2 border-b-[#B48C36] font-bold'
                       : d.isWeekend
@@ -258,16 +289,12 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
                       : 'bg-white'
                   }`}
                 >
-                  <p className="text-[10px] font-mono text-stone-500 uppercase">{d.dayName}</p>
-                  <p
-                    className={`text-xs font-mono font-bold mt-0.5 ${
-                      d.isToday ? 'text-[#B48C36]' : 'text-stone-800'
-                    }`}
-                  >
+                  <p className="text-[9px] font-mono text-stone-500 uppercase">{d.dayName}</p>
+                  <p className={`text-xs font-mono font-bold ${d.isToday ? 'text-[#B48C36]' : 'text-stone-800'}`}>
                     {d.dayNumber}
                   </p>
                   {d.isToday && (
-                    <span className="inline-block mt-0.5 text-[9px] font-mono text-[#B48C36] uppercase px-1 rounded bg-[#B48C36]/15 font-bold">
+                    <span className="inline-block text-[8px] font-mono text-[#B48C36] uppercase px-1 rounded bg-[#B48C36]/15 font-bold">
                       Today
                     </span>
                   )}
@@ -285,110 +312,86 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
               return (
                 <div key={room.id} className="flex relative group hover:bg-[#FAF6EC]/30 transition-colors">
                   {/* Left Frozen Column: Room Details */}
-                  <div className="w-64 flex-shrink-0 sticky left-0 z-20 bg-white border-r border-stone-200 p-3 flex items-center justify-between gap-2 shadow-sm">
+                  <div className="w-48 sm:w-60 flex-shrink-0 sticky left-0 z-20 bg-white border-r border-stone-200 p-2 sm:p-2.5 flex items-center justify-between gap-2 shadow-xs">
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-sm text-stone-900 group-hover:text-[#B48C36] transition-colors">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono font-bold text-xs sm:text-sm text-stone-900 group-hover:text-[#B48C36] transition-colors">
                           {room.roomNumber}
                         </span>
-                        <span className="text-[10px] font-mono text-stone-500">Floor {room.floor}</span>
+                        <span className="text-[9px] font-mono text-stone-500">Fl {room.floor}</span>
                       </div>
-                      <p className="text-[11px] text-stone-600 truncate max-w-[140px]" title={category?.name}>
-                        {category?.name || 'Luxury Category'}
+                      <p className="text-[10px] text-stone-600 truncate max-w-[110px] sm:max-w-[140px]" title={category?.name}>
+                        {category?.name || 'Standard'}
                       </p>
-                      <p className="text-[10px] font-mono font-semibold text-[#936F25]">
+                      <p className="text-[9px] font-mono font-semibold text-[#936F25]">
                         {formatINR(category?.basePrice || 0)}/nt
                       </p>
                     </div>
 
-                    {/* Room Quick Status Toggle Dropdown / Button */}
                     <div className="flex flex-col items-end gap-1">
-                      <button
-                        onClick={() => {
-                          const nextStatus: Record<RoomStatus, RoomStatus> = {
-                            Available: 'Cleaning',
-                            Cleaning: 'Available',
-                            Occupied: 'Occupied',
-                            Reserved: 'Reserved',
-                            Maintenance: 'Available',
-                          };
-                          if (room.status !== 'Occupied' && room.status !== 'Reserved') {
-                            updateRoomStatus(room.id, nextStatus[room.status]);
-                          }
-                        }}
-                        title="Click to cycle status (Available / Cleaning)"
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border transition-all ${getStatusBadge(
-                          room.status
-                        )}`}
-                      >
+                      <span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded-full border ${getStatusBadge(room.status)}`}>
                         {room.status}
-                      </button>
-
-                      <span className="text-[9px] font-mono text-stone-500 flex items-center gap-1">
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            room.cleanliness === 'Clean' || room.cleanliness === 'Inspected'
-                              ? 'bg-emerald-500'
-                              : 'bg-amber-500 animate-pulse'
-                          }`}
-                        ></span>
-                        {room.cleanliness}
                       </span>
+                      <select
+                        value={room.status}
+                        onChange={(e) => updateRoomStatus(room.id, e.target.value as RoomStatus)}
+                        className="text-[9px] font-mono bg-stone-50 border border-stone-200 rounded px-1 py-0.5 text-stone-700"
+                        title="Quick Status Override"
+                      >
+                        <option value="Available">Available</option>
+                        <option value="Occupied">Occupied</option>
+                        <option value="Reserved">Reserved</option>
+                        <option value="Cleaning">Cleaning</option>
+                        <option value="Maintenance">Maintenance</option>
+                      </select>
                     </div>
                   </div>
 
-                  {/* Date Grid Cells */}
-                  <div className="flex relative h-16">
-                    {timelineDates.map((dateObj) => {
-                      const isOccupiedCell = roomReservations.some((res) =>
-                        isDateInSpan(dateObj.dateStr, res.checkInDate, res.checkOutDate)
-                      );
+                  {/* Date Grid Cell Slots */}
+                  <div className="flex relative">
+                    {timelineDates.map((dateObj) => (
+                      <div
+                        key={dateObj.dateStr}
+                        onClick={() => {
+                          if (category) {
+                            setQuickBookingSlot({
+                              room,
+                              category,
+                              dateStr: dateObj.dateStr,
+                            });
+                          }
+                        }}
+                        className={`w-24 sm:w-28 flex-shrink-0 border-r border-stone-100 h-14 relative cursor-pointer hover:bg-stone-100/60 transition-colors flex items-center justify-center group/slot ${
+                          dateObj.isWeekend ? 'bg-stone-50/30' : ''
+                        }`}
+                        title={`Click to book Room ${room.roomNumber} for ${dateObj.dateStr}`}
+                      >
+                        <Plus className="w-3.5 h-3.5 text-stone-300 opacity-0 group-hover/slot:opacity-100 transition-opacity" />
+                      </div>
+                    ))}
 
-                      return (
-                        <div
-                          key={dateObj.dateStr}
-                          onClick={() => {
-                            if (!isOccupiedCell && category) {
-                              setQuickBookingSlot({
-                                room,
-                                category,
-                                dateStr: dateObj.dateStr,
-                              });
-                            }
-                          }}
-                          className={`w-28 flex-shrink-0 border-r border-stone-200 h-full relative group/cell cursor-pointer transition-colors ${
-                            dateObj.isWeekend ? 'bg-stone-50/40' : 'bg-white'
-                          } ${
-                            !isOccupiedCell ? 'hover:bg-[#FAF6EC]' : ''
-                          }`}
-                        >
-                          {!isOccupiedCell && (
-                            <div className="hidden group-hover/cell:flex absolute inset-0 items-center justify-center text-[#B48C36]">
-                              <Plus className="w-4 h-4" />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {/* Overlay: Positioned Reservation Blocks with Authentic Real OTA Logos */}
+                    {/* Overlay Active Reservation Bars */}
                     {roomReservations.map((res) => {
-                      const timelineStart = parseISO(timelineStartStr);
-                      const resCheckIn = parseISO(res.checkInDate);
-                      const resCheckOut = parseISO(res.checkOutDate);
+                      const resStart = res.checkInDate < timelineStartStr ? timelineStartStr : res.checkInDate;
+                      const resEnd = res.checkOutDate > timelineEndStr ? timelineEndStr : res.checkOutDate;
 
-                      const dayOffset = differenceInCalendarDays(resCheckIn, timelineStart);
-                      const durationInTimeline = Math.min(
-                        differenceInCalendarDays(resCheckOut, resCheckIn),
-                        totalDays - Math.max(0, dayOffset)
+                      const startDiff = differenceInCalendarDays(
+                        parseISO(resStart),
+                        parseISO(timelineStartStr)
+                      );
+                      const nightSpan = differenceInCalendarDays(
+                        parseISO(resEnd),
+                        parseISO(resStart)
                       );
 
-                      // Each column is 112px (w-28)
-                      const colWidth = 112;
-                      const leftPixels = Math.max(0, dayOffset) * colWidth;
-                      const widthPixels = durationInTimeline * colWidth - 8;
+                      if (nightSpan <= 0) return null;
 
-                      const blockStyle = getReservationBlockStyle(res);
+                      // Width per day: 96px (mobile) / 112px (desktop)
+                      const dayWidth = window.innerWidth >= 640 ? 112 : 96;
+                      const leftPos = Math.max(0, startDiff * dayWidth);
+                      const barWidth = Math.max(dayWidth - 8, nightSpan * dayWidth - 8);
+
+                      const style = getReservationBlockStyle(res);
 
                       return (
                         <div
@@ -398,34 +401,28 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
                             onSelectReservation(res.id);
                           }}
                           style={{
-                            left: `${leftPixels + 4}px`,
-                            width: `${Math.max(colWidth - 8, widthPixels)}px`,
-                            top: '8px',
-                            height: '48px',
+                            left: `${leftPos + 4}px`,
+                            width: `${barWidth}px`,
+                            top: '6px',
+                            height: '42px',
                           }}
-                          className={`absolute z-10 rounded-xl border p-2 flex items-center justify-between cursor-pointer transition-all select-none ${blockStyle.bg} ${blockStyle.hover}`}
+                          className={`absolute z-10 rounded-xl border p-1.5 cursor-pointer transition-all flex flex-col justify-between overflow-hidden ${style.bg} ${style.hover}`}
+                          title={`${res.guest.fullName} • ${res.bookingCode} (${res.source}) • Click for Folio`}
                         >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-xs font-serif font-bold truncate text-stone-900 group-hover/block:text-[#B48C36]">
-                                  {res.guest.fullName}
-                                </p>
-                                {res.guest.vipStatus && (
-                                  <span title="VIP Sovereign Dignitary">
-                                    <Sparkles className="w-3 h-3 text-[#B48C36] flex-shrink-0" />
-                                  </span>
-                                )}
-                              </div>
-                              <p className="text-[10px] font-mono text-stone-500 truncate">
-                                {res.bookingCode} • {res.nights} nts
-                              </p>
-                            </div>
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-serif text-[11px] font-bold text-stone-900 truncate">
+                              {res.guest.fullName}
+                            </span>
+                            <span className="shrink-0 scale-90">
+                              <OtaLogo source={res.source} size="xs" />
+                            </span>
                           </div>
 
-                          {/* Authentic Brand Logo */}
-                          <div className="flex items-center gap-1 flex-shrink-0 ml-1">
-                            <OtaLogo channel={res.source} size="xs" showText={false} />
+                          <div className="flex items-center justify-between text-[9px] font-mono text-stone-500">
+                            <span className="truncate">{res.bookingCode}</span>
+                            <span className="font-bold text-stone-800">
+                              {formatINR(res.roomRatePerNight)}
+                            </span>
                           </div>
                         </div>
                       );
@@ -438,17 +435,13 @@ export const TapeChart: React.FC<TapeChartProps> = ({ onSelectReservation }) => 
         </div>
       </div>
 
-      {/* Quick Reservation Drawer Modal */}
+      {/* Quick Booking Drawer */}
       {quickBookingSlot && (
         <QuickReservationModal
           room={quickBookingSlot.room}
           category={quickBookingSlot.category}
-          initialCheckInDate={quickBookingSlot.dateStr}
+          initialDate={quickBookingSlot.dateStr}
           onClose={() => setQuickBookingSlot(null)}
-          onSuccess={(resId) => {
-            setQuickBookingSlot(null);
-            onSelectReservation(resId);
-          }}
         />
       )}
     </div>

@@ -3,7 +3,8 @@ import React from 'react';
 export type OtaPartner = 'MakeMyTrip' | 'MAKEMYTRIP' | 'Goibibo' | 'GOIBIBO' | 'Booking.com' | 'BOOKING_COM' | 'Agoda' | 'AGODA' | 'Expedia' | 'EXPEDIA' | 'Airbnb' | 'AIRBNB' | 'Direct Web' | 'DIRECT_WEB' | 'Walk-In' | 'WALK_IN' | 'Luxury Escapes';
 
 interface OtaLogoProps {
-  channel: OtaPartner | string;
+  channel?: OtaPartner | string;
+  source?: OtaPartner | string;
   size?: 'xs' | 'sm' | 'md' | 'lg';
   showText?: boolean;
   className?: string;
@@ -11,11 +12,13 @@ interface OtaLogoProps {
 
 export const OtaLogo: React.FC<OtaLogoProps> = ({
   channel,
+  source,
   size = 'sm',
   showText = true,
   className = '',
 }) => {
-  const norm = channel.toUpperCase().replace(/\s+/g, '_').replace('.', '_');
+  const channelName = channel || source || 'Direct Web';
+  const norm = channelName.toUpperCase().replace(/\s+/g, '_').replace('.', '_');
 
   // Size mapping
   const heightClass = {
@@ -39,95 +42,83 @@ export const OtaLogo: React.FC<OtaLogoProps> = ({
     );
   }
 
-  // 2. Goibibo (Orange #F26722 and Blue #1C8FE3)
+  // 2. Goibibo (Orange #EC5B24 & Blue badge)
   if (norm.includes('GOIBIBO') || norm === 'GOI') {
     return (
-      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-[#F26722]/30 text-[#1C1917] font-sans font-bold shadow-sm ${heightClass} ${className}`}>
-        <svg viewBox="0 0 28 28" className="h-3.5 w-auto" aria-label="Goibibo">
-          <circle cx="9" cy="14" r="7" fill="#F26722" />
-          <circle cx="19" cy="14" r="7" fill="#1C8FE3" fillOpacity="0.9" />
-          <path d="M9 11l3 3-3 3M19 11l-3 3 3 3" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#EC5B24] text-white font-sans font-bold shadow-sm ${heightClass} ${className}`}>
+        <svg viewBox="0 0 32 24" className="h-3.5 w-auto fill-current" aria-label="Goibibo">
+          <circle cx="8" cy="12" r="6" fill="#FFFFFF" />
+          <path d="M16 6h10v4H16zM16 14h10v4H16z" fill="#FFFFFF" />
         </svg>
-        {showText && (
-          <span className="tracking-tight text-[11px] leading-none">
-            <span className="text-[#F26722] font-black">go</span>
-            <span className="text-[#1C8FE3] font-bold">ibibo</span>
-          </span>
-        )}
+        {showText && <span className="tracking-tight font-extrabold text-[11px] leading-none">goibibo</span>}
       </div>
     );
   }
 
-  // 3. Booking.com (Deep Navy Blue #003580)
+  // 3. Booking.com (Dark Blue #003580)
   if (norm.includes('BOOKING') || norm === 'BDC') {
     return (
       <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#003580] text-white font-sans font-bold shadow-sm ${heightClass} ${className}`}>
-        <svg viewBox="0 0 24 24" className="h-3.5 w-auto fill-current" aria-label="Booking.com">
-          <path d="M5 4h6.5c3 0 5.5 1.5 5.5 4 0 1.5-.8 2.8-2.2 3.4 1.8.6 2.7 2 2.7 3.8 0 2.8-2.4 4.8-5.8 4.8H5V4zm3.2 6h3c1.3 0 2.3-.6 2.3-1.8 0-1.1-.9-1.7-2.3-1.7H8.2V10zm0 7.5h3.3c1.5 0 2.6-.7 2.6-2.1 0-1.3-1.1-2.1-2.6-2.1H8.2v4.2z" fill="#FFFFFF" />
-          <circle cx="20" cy="17.5" r="1.8" fill="#00BAFC" />
-        </svg>
-        {showText && <span className="tracking-tight font-extrabold text-[11px] leading-none">Booking.com</span>}
+        <span className="font-extrabold tracking-tighter text-xs leading-none">B.</span>
+        {showText && <span className="tracking-tight font-bold text-[11px] leading-none">Booking.com</span>}
       </div>
     );
   }
 
-  // 4. Agoda (Five Multicolored Dots)
-  if (norm.includes('AGODA') || norm === 'AGD') {
+  // 4. Agoda (Teal #0B7285 with red/yellow dots)
+  if (norm.includes('AGODA')) {
     return (
-      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-stone-200 text-stone-800 font-sans font-bold shadow-sm ${heightClass} ${className}`}>
-        <div className="flex items-center gap-0.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-[#EA2330]"></span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B]"></span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#10B981]"></span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#06B6D4]"></span>
-          <span className="w-1.5 h-1.5 rounded-full bg-[#8B5CF6]"></span>
+      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white border border-stone-300 text-stone-900 font-sans font-bold shadow-sm ${heightClass} ${className}`}>
+        <div className="flex gap-0.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+          <span className="w-1.5 h-1.5 rounded-full bg-yellow-400"></span>
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
         </div>
-        {showText && <span className="tracking-tight font-bold text-[11px] leading-none text-stone-900">agoda</span>}
+        {showText && <span className="tracking-tight font-bold text-[11px] leading-none text-stone-800">agoda</span>}
       </div>
     );
   }
 
-  // 5. Expedia (Navy #000055 with Yellow Airplane)
+  // 5. Expedia (Yellow #FEE100 and Navy #002244)
   if (norm.includes('EXPEDIA')) {
     return (
-      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#000055] text-white font-sans font-bold shadow-sm ${heightClass} ${className}`}>
-        <svg viewBox="0 0 24 24" className="h-3.5 w-auto" fill="#FFCC00">
-          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z" />
+      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#002244] text-[#FEE100] font-sans font-bold shadow-sm ${heightClass} ${className}`}>
+        <svg viewBox="0 0 24 24" className="h-3 w-auto fill-current">
+          <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
         </svg>
         {showText && <span className="tracking-tight font-bold text-[11px] leading-none">Expedia</span>}
       </div>
     );
   }
 
-  // 6. Airbnb (Coral #FF5A5F)
+  // 6. Airbnb (Rausch Pink #FF5A5F)
   if (norm.includes('AIRBNB')) {
     return (
       <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#FF5A5F] text-white font-sans font-bold shadow-sm ${heightClass} ${className}`}>
-        <svg viewBox="0 0 24 24" className="h-3.5 w-auto fill-current">
-          <path d="M12 2C8 2 5 6 5 10c0 4 3 8 7 12 4-4 7-8 7-12 0-4-3-8-7-8zm0 15c-2 0-3-1.5-3-3.5s1-3.5 3-3.5 3 1.5 3 3.5-1 3.5-3 3.5z" />
+        <svg viewBox="0 0 24 24" className="h-3 w-auto fill-current">
+          <path d="M12 2C8.5 2 6 5 6 8.5c0 4 6 11.5 6 11.5s6-7.5 6-11.5C18 5 15.5 2 12 2zm0 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"/>
         </svg>
         {showText && <span className="tracking-tight font-bold text-[11px] leading-none">airbnb</span>}
       </div>
     );
   }
 
-  // 7. Direct Web (Polished Warm Gold & Charcoal)
-  if (norm.includes('DIRECT') || norm === 'DIRECT_WEB') {
+  // 7. Direct Web Engine
+  if (norm.includes('DIRECT') || norm.includes('WEB')) {
     return (
-      <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[#FAF6EC] border border-[#B48C36]/40 text-[#936F25] font-serif font-bold shadow-sm ${heightClass} ${className}`}>
-        <svg viewBox="0 0 24 24" className="h-3 w-auto fill-[#B48C36]">
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-        </svg>
-        {showText && <span className="tracking-wider uppercase text-[10px] font-mono font-bold">DIRECT WEB</span>}
+      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FAF6EC] border border-[#B48C36]/50 text-[#936F25] font-serif font-bold ${heightClass} ${className}`}>
+        <span className="w-1.5 h-1.5 rounded-full bg-[#B48C36]"></span>
+        {showText && <span className="text-[11px] leading-none">Direct Web</span>}
       </div>
     );
   }
 
-  // Default: Front Desk Walk-In
+  // Default Walk-In / Hotel Front Desk
   return (
-    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 text-stone-700 font-mono text-[10px] font-semibold ${heightClass} ${className}`}>
-      <span>WALK-IN</span>
+    <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 border border-stone-200 text-stone-700 font-sans font-bold ${heightClass} ${className}`}>
+      <span className="w-1.5 h-1.5 rounded-full bg-stone-500"></span>
+      {showText && <span className="text-[11px] leading-none">{channelName}</span>}
     </div>
   );
 };
-
